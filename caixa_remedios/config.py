@@ -15,21 +15,15 @@ OLED_I2C_ADDR = 0x3C
 OLED_WIDTH    = 128
 OLED_HEIGHT   = 32
 
-# ─── Servo MG996R ─────────────────────────────────────────────────────────────
-SERVO_PIN      = 2   # GP2 (PWM)
+# ─── Servo SM-S4303R (rotação contínua) ──────────────────────────────────────
+# Pulso 50 Hz:  ~1000 µs = CW máx  |  ~1500 µs = parado  |  ~2000 µs = CCW máx
+SERVO_PIN      = 2      # GP2 (PWM)
 SERVO_FREQ     = 50
-SERVO_MIN_US   = 500
-SERVO_MAX_US   = 2500
-SERVO_OPEN_DEG  = 90
-SERVO_CLOSE_DEG = 0
-
-# ─── Motor DC (L298N) ─────────────────────────────────────────────────────────
-MOTOR_IN1_PIN  = 3   # GP3
-MOTOR_IN2_PIN  = 4   # GP4
-MOTOR_ENA_PIN  = 5   # GP5 (PWM)
-MOTOR_FREQ     = 1000
-MOTOR_SPEED    = 60000
-MOTOR_RUN_MS   = 800
+SERVO_STOP_US  = 1500   # parado — calibre se servo deriva em repouso
+SERVO_CW_US    = 1000   # abre (sentido horário)
+SERVO_CCW_US   = 2000   # fecha (sentido anti-horário)
+SERVO_OPEN_MS  = 600    # tempo (ms) para abrir — ajuste conforme mecanismo
+SERVO_CLOSE_MS = 600    # tempo (ms) para fechar
 
 # ─── Sensor de Presença HC-SR501 ──────────────────────────────────────────────
 PIR_PIN            = 6   # GP6
