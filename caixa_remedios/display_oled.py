@@ -69,15 +69,36 @@ class OLEDDisplay:
         self._oled.show()
 
     def show_menu(self, title: str, options: list, selected: int = -1):
-        """Menu simples: título + até 2 opções visíveis."""
+        """Título + até 2 opções. Cabe em 128x32 (4 linhas × 8px)."""
         self._oled.fill(0)
         self._oled.text(title[:16], 0, 0, 1)
-        # separador
-        self._oled.hline(0, 10, 128, 1)
+        self._oled.hline(0, 9, 128, 1)
         for i, opt in enumerate(options[:2]):
-            y = 14 + i * 10
+            y = 12 + i * 10
             prefix = ">" if i == selected else " "
             self._oled.text(f"{prefix}{opt}"[:16], 0, y, 1)
+        self._oled.show()
+
+    def show_med_grid(self, names: list):
+        """
+        Grade 2x2 — mostra os 4 remédios de uma vez em 128x32.
+        names: lista de 4 strings.
+        Layout:
+          Selec.Remedio
+          [1]Nnnnn [2]Nnnnn
+          [3]Nnnnn [4]Nnnnn
+        Cada célula = 8 chars × 8px = 64px de largura.
+        """
+        self._oled.fill(0)
+        self._oled.text("Selec.Remedio", 0, 0, 1)
+        for i in range(4):
+            col = i % 2        # 0=esquerda, 1=direita
+            row = i // 2       # 0=linha1, 1=linha2
+            name = names[i][:5] if i < len(names) else "-----"
+            cell = f"[{i+1}]{name}"   # ex: "[1]Aspir"
+            x = col * 64
+            y = 12 + row * 10
+            self._oled.text(cell[:8], x, y, 1)
         self._oled.show()
 
     def show_input(self, prompt: str, value: str, cursor: bool = True):
