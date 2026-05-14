@@ -76,8 +76,8 @@ class Menu:
             d.show_menu("=== MENU ===", ["1-Remedios", "2-Acertar hora", "3-Acertar data"], self._sel_opt)
 
         elif self._state == self._ST_SEL_MED:
-            opts = [f"{i+1}-{self._am.med_name(i)[:10]}" for i in range(config.MAX_MEDS)]
-            d.show_menu("Selec.Remedio", opts[self._sel_med:self._sel_med+2], 0)
+            # grade 2x2 — todos os 4 remédios visíveis de uma vez
+            d.show_med_grid([self._am.med_name(i) for i in range(config.MAX_MEDS)])
 
         elif self._state == self._ST_MED_OPT:
             name = self._am.med_name(self._sel_med)[:10]
@@ -129,14 +129,9 @@ class Menu:
     def _open_set_date(self): self._state = self._ST_SET_DATE; self._input_buf = ""; self._render()
 
     def _h_sel_med(self, key):
-        if key == KEY_UP:
-            self._sel_med = (self._sel_med - 1) % config.MAX_MEDS
-        elif key == KEY_DOWN:
-            self._sel_med = (self._sel_med + 1) % config.MAX_MEDS
-        elif key in '1234':
+        # grade 2x2 visível — seleciona direto por número
+        if key in '1234':
             self._sel_med = int(key) - 1
-            self._state = self._ST_MED_OPT; self._sel_opt = 0
-        elif key == KEY_OK:
             self._state = self._ST_MED_OPT; self._sel_opt = 0
         elif key == KEY_BACK:
             self._state = self._ST_MAIN; self._sel_opt = 0
