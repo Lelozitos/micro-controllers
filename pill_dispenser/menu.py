@@ -27,6 +27,7 @@ class Menu:
     _ST_SET_TIME    = 6
     _ST_SET_DATE    = 7
     _ST_CONFIRM_DEL = 8
+    _ST_INFO        = 9
 
     def __init__(self, display, alarm_mgr, rtc, buzzer):
         self._d  = display
@@ -45,10 +46,14 @@ class Menu:
     # ── public interface ──────────────────────────────────────────────────────
 
     def open(self):
-        """Open the main menu."""
-        self._state = self._ST_MAIN
-        self._sel_opt = 0
+        """Open the info screen (time + alarms). Any key enters the options menu."""
+        self._state = self._ST_INFO
         self._render()
+
+    def tick(self):
+        """Refresh time-sensitive screens. Call each loop iteration."""
+        if self._state == self._ST_INFO:
+            self._render()
 
     def is_open(self) -> bool:
         return self._state != self._ST_IDLE
@@ -56,6 +61,7 @@ class Menu:
     def handle_key(self, key: str):
         self._last_activity = utime.ticks_ms()
         handler = {
+            self._ST_INFO:        self._h_info,
             self._ST_MAIN:        self._h_main,
             self._ST_SEL_MED:     self._h_sel_med,
             self._ST_MED_OPT:     self._h_med_opt,
@@ -72,7 +78,20 @@ class Menu:
 
     def _render(self):
         d = self._d
-        if self._state == self._ST_MAIN:
+        if self._state == self._ST_INFO:
+            h, m, s = self._rtc.now()
+            hhmm = f"{h:02d}:{m:02d}"
+            time_str = f"{h:02d}:{m:02d}:{s:02d}"
+            all_alarms = self._am.all_alarms_flat()
+            upcoming = [a for a in all_alarms if a[1] >= hhmm]
+            if not upcoming:
+                upcoming = all_alarms
+            alarm_strs = [f"{t} {self._am.med_name(i)[:5]}" for i, t in upcoming[:2]]
+            if not alarm_strs:
+                alarm_strs = ["No alarms"]
+            d.show_info(time_str, alarm_strs)
+
+        elif self._state == self._ST_MAIN:
             d.show_menu("=== MENU ===", ["1-Medicines", "2-Set time", "3-Set date"], self._sel_opt)
 
         elif self._state == self._ST_SEL_MED:
@@ -105,6 +124,14 @@ class Menu:
             d.show_message("Delete?", KEY_OK+"=yes  "+KEY_BACK+"=no")
 
     # ── state handlers ────────────────────────────────────────────────────────
+
+    def _h_info(self, key):
+        if key == KEY_BACK:
+            self._close(); return
+        self._state = self._ST_MAIN
+        self._sel_opt = 0
+        self._d._last_content = ""  # force redraw
+        self._render()
 
     def _h_main(self, key):
         if key == KEY_UP:

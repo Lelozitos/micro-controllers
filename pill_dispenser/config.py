@@ -1,12 +1,9 @@
 # config.py — Pin assignments and global constants
-# Pins aligned with the EEN251_Sistemas_Embarcados repository standard
-# Repo: https://github.com/rodmarfran/EEN251_Sistemas_Embarcados
 
 # ─── I2C (DS1307 + OLED share the same bus) ──────────────────────────────────
-# Course standard: SDA=GP8, SCL=GP9
 I2C_ID       = 0    # I2C0
-I2C_SDA_PIN  = 8    # GP8  ← padrão EEN251
-I2C_SCL_PIN  = 9    # GP9  ← padrão EEN251
+I2C_SDA_PIN  = 8    # GP8
+I2C_SCL_PIN  = 9    # GP9
 I2C_FREQ     = 400_000
 
 RTC_I2C_ADDR  = 0x68
@@ -37,14 +34,11 @@ BUZZER_DUTY   = 32767
 
 # ─── 4×4 Matrix Keypad ───────────────────────────────────────────────────────
 # Rows: GP10–GP13  |  Columns: GP14–GP17
-# (separate from I2C on GP8/GP9 to avoid conflict)
-#
-# Physical wiring (following EEN251 repo key_map):
-#   rows_pins[0]=GP10 → BOTTOM row of keypad  (*,0,#,D)
+#   rows_pins[0]=GP10 → BOTTOM row (*,0,#,D)
 #   rows_pins[1]=GP11 → row (7,8,9,C)
 #   rows_pins[2]=GP12 → row (4,5,6,B)
-#   rows_pins[3]=GP13 → TOP row of keypad  (1,2,3,A)
-#   cols_pins[0]=GP14 → RIGHT column  (D,C,B,A)
+#   rows_pins[3]=GP13 → TOP row (1,2,3,A)
+#   cols_pins[0]=GP14 → RIGHT column (D,C,B,A)
 #   cols_pins[1]=GP15 → column (#,9,6,3)
 #   cols_pins[2]=GP16 → column (0,8,5,2)
 #   cols_pins[3]=GP17 → LEFT column (*,7,4,1)

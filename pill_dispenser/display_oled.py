@@ -101,6 +101,19 @@ class OLEDDisplay:
             self._oled.text(cell[:8], x, y, 1)
         self._oled.show()
 
+    def show_info(self, time_str: str, alarms: list):
+        """Info screen: current time + up to 2 upcoming alarms."""
+        content = time_str + str(alarms)
+        if content == self._last_content:
+            return
+        self._last_content = content
+        self._oled.fill(0)
+        x = max(0, (128 - len(time_str) * 8) // 2)
+        self._oled.text(time_str[:16], x, 0, 1)
+        for i, a in enumerate(alarms[:2]):
+            self._oled.text(a[:16], 0, 13 + i * 11, 1)
+        self._oled.show()
+
     def show_input(self, prompt: str, value: str, cursor: bool = True):
         self._oled.fill(0)
         self._oled.text(prompt[:16], 0, 2, 1)
