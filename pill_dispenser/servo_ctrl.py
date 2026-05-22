@@ -1,11 +1,11 @@
-# servo_ctrl.py — Controle do servo de rotação contínua SM-S4303R
+# servo_ctrl.py — SM-S4303R continuous rotation servo control
 #
-# SM-S4303R: servo de rotação contínua, 50 Hz
-#   ~1000 µs → gira CW  (sentido horário)    — abre
-#   ~1500 µs → parado
-#   ~2000 µs → gira CCW (anti-horário)        — fecha
+# SM-S4303R: continuous rotation servo, 50 Hz
+#   ~1000 µs → CW spin (clockwise)    — open
+#   ~1500 µs → stopped
+#   ~2000 µs → CCW spin (counter-clockwise) — close
 #
-# Pico usa duty_u16 (0–65535). Conversão:
+# Pico uses duty_u16 (0–65535). Conversion:
 #   duty = pulse_us / 20000 * 65535
 
 from machine import Pin, PWM
@@ -29,25 +29,25 @@ class Servo:
         self._set(config.SERVO_STOP_US)
 
     def open(self):
-        """Gira CW por SERVO_OPEN_MS ms, depois para."""
+        """Spin CW for SERVO_OPEN_MS ms, then stop."""
         self._set(config.SERVO_CW_US)
         utime.sleep_ms(config.SERVO_OPEN_MS)
         self.stop()
 
     def close(self):
-        """Gira CCW por SERVO_CLOSE_MS ms, depois para."""
+        """Spin CCW for SERVO_CLOSE_MS ms, then stop."""
         self._set(config.SERVO_CCW_US)
         utime.sleep_ms(config.SERVO_CLOSE_MS)
         self.stop()
 
     def run_cw(self, duration_ms: int):
-        """Gira CW por duration_ms ms."""
+        """Spin CW for duration_ms ms."""
         self._set(config.SERVO_CW_US)
         utime.sleep_ms(duration_ms)
         self.stop()
 
     def run_ccw(self, duration_ms: int):
-        """Gira CCW por duration_ms ms."""
+        """Spin CCW for duration_ms ms."""
         self._set(config.SERVO_CCW_US)
         utime.sleep_ms(duration_ms)
         self.stop()

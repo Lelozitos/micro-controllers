@@ -1,4 +1,4 @@
-# pir_sensor.py — Gerenciador do sensor PIR HC-SR501
+# pir_sensor.py — HC-SR501 PIR sensor manager
 
 from machine import Pin
 import utime
@@ -7,9 +7,9 @@ import config
 
 class PIRSensor:
     """
-    Detecta presença via sinal digital do HC-SR501.
-    Fornece estado instantâneo e rastreamento de "última detecção"
-    para controle de timeout do display.
+    Detects presence via HC-SR501 digital signal.
+    Provides instantaneous state and "last detected" tracking
+    for display timeout control.
     """
 
     def __init__(self):
@@ -18,25 +18,25 @@ class PIRSensor:
         self._debounce_ms = config.PIR_DEBOUNCE_MS
 
     def detected(self) -> bool:
-        """True se sensor está ativo agora."""
+        """True if sensor is currently active."""
         return self._pin.value() == 1
 
     def poll(self) -> bool:
         """
-        Chame no loop principal.
-        Atualiza timestamp de última detecção.
-        Retorna True se houve detecção (com debounce).
+        Call in the main loop.
+        Updates last-detected timestamp.
+        Returns True if presence detected (with debounce).
         """
         if self._pin.value() == 1:
             now = utime.ticks_ms()
             if utime.ticks_diff(now, self._last_detected) > self._debounce_ms:
                 self._last_detected = now
                 return True
-            self._last_detected = now  # renova mesmo sem retornar True
+            self._last_detected = now  # renew even without returning True
         return False
 
     def seconds_since_last(self) -> int:
-        """Segundos desde a última presença detectada."""
+        """Seconds since last presence detection."""
         return utime.ticks_diff(utime.ticks_ms(), self._last_detected) // 1000
 
     def display_should_sleep(self) -> bool:

@@ -1,23 +1,23 @@
-# menu.py — Sistema de menu interativo via teclado + OLED
+# menu.py — Interactive menu system via keypad + OLED
 
 import utime
 import config
 
-# Teclas de navegação
-KEY_UP     = 'A'  # subir / incrementar
-KEY_DOWN   = 'B'  # descer / decrementar
-KEY_OK     = '#'  # confirmar / selecionar
-KEY_BACK   = '*'  # voltar / cancelar
+# Navigation keys
+KEY_UP     = 'A'  # up / increment
+KEY_DOWN   = 'B'  # down / decrement
+KEY_OK     = '#'  # confirm / select
+KEY_BACK   = '*'  # back / cancel
 
 
 class Menu:
     """
-    Máquina de estados para menu de configuração.
-    Chame handle_key() com a tecla lida pelo keypad.
-    O menu se comunica com AlarmManager e OLEDDisplay injetados.
+    State machine for the configuration menu.
+    Call handle_key() with the key read from the keypad.
+    Communicates with injected AlarmManager and OLEDDisplay.
     """
 
-    # estados internos
+    # internal states
     _ST_IDLE        = 0
     _ST_MAIN        = 1
     _ST_SEL_MED     = 2
@@ -42,10 +42,10 @@ class Menu:
         self._alarm_sel  = 0
         self._last_activity = utime.ticks_ms()
 
-    # ── entrada pública ───────────────────────────────────────────────────────
+    # ── public interface ──────────────────────────────────────────────────────
 
     def open(self):
-        """Abre o menu principal."""
+        """Open the main menu."""
         self._state = self._ST_MAIN
         self._sel_opt = 0
         self._render()
@@ -68,43 +68,43 @@ class Menu:
         if handler:
             handler(key)
 
-    # ── renderização ──────────────────────────────────────────────────────────
+    # ── rendering ────────────────────────────────────────────────────────────
 
     def _render(self):
         d = self._d
         if self._state == self._ST_MAIN:
-            d.show_menu("=== MENU ===", ["1-Remedios", "2-Acertar hora", "3-Acertar data"], self._sel_opt)
+            d.show_menu("=== MENU ===", ["1-Medicines", "2-Set time", "3-Set date"], self._sel_opt)
 
         elif self._state == self._ST_SEL_MED:
-            # grade 2x2 — todos os 4 remédios visíveis de uma vez
+            # 2x2 grid — all 4 medicines visible at once
             d.show_med_grid([self._am.med_name(i) for i in range(config.MAX_MEDS)])
 
         elif self._state == self._ST_MED_OPT:
             name = self._am.med_name(self._sel_med)[:10]
-            d.show_menu(name, ["1-Add alarme", "2-Ver alarm.", "3-Ativar/Des."], self._sel_opt)
+            d.show_menu(name, ["1-Add alarm", "2-View alarms", "3-Enable/Dis."], self._sel_opt)
 
         elif self._state == self._ST_ADD_ALARM:
-            d.show_input("Horario HH:MM", self._input_buf)
+            d.show_input("Time HH:MM", self._input_buf)
 
         elif self._state == self._ST_LIST_ALARMS:
             med  = self._am.get_med(self._sel_med)
             alms = med.get("alarms", [])
             if not alms:
-                d.show_message("Sem alarmes", KEY_BACK+"=voltar")
+                d.show_message("No alarms", KEY_BACK+"=back")
             else:
                 item = alms[self._alarm_sel] if self._alarm_sel < len(alms) else "--:--"
                 d.show_menu(f"Alarm {self._alarm_sel+1}/{len(alms)}", [item, KEY_OK+"=del "+KEY_BACK+"=vol"])
 
         elif self._state == self._ST_SET_TIME:
-            d.show_input("Hora HH:MM:SS", self._input_buf)
+            d.show_input("Time HH:MM:SS", self._input_buf)
 
         elif self._state == self._ST_SET_DATE:
-            d.show_input("Data DD/MM/AA", self._input_buf)
+            d.show_input("Date DD/MM/YY", self._input_buf)
 
         elif self._state == self._ST_CONFIRM_DEL:
-            d.show_message("Deletar?", KEY_OK+"=sim  "+KEY_BACK+"=nao")
+            d.show_message("Delete?", KEY_OK+"=yes  "+KEY_BACK+"=no")
 
-    # ── handlers por estado ───────────────────────────────────────────────────
+    # ── state handlers ────────────────────────────────────────────────────────
 
     def _h_main(self, key):
         if key == KEY_UP:
@@ -129,7 +129,7 @@ class Menu:
     def _open_set_date(self): self._state = self._ST_SET_DATE; self._input_buf = ""; self._render()
 
     def _h_sel_med(self, key):
-        # grade 2x2 visível — seleciona direto por número
+        # 2x2 grid visible — select directly by number
         if key in '1234':
             self._sel_med = int(key) - 1
             self._state = self._ST_MED_OPT; self._sel_opt = 0
@@ -146,7 +146,7 @@ class Menu:
             self._am.toggle_med(self._sel_med)
             self._bz.beep_short()
             med = self._am.get_med(self._sel_med)
-            status = "Ativado" if med["enabled"] else "Desativado"
+            status = "Enabled" if med["enabled"] else "Disabled"
             self._d.show_message(med["name"][:16], status)
             utime.sleep_ms(1200)
         elif key == KEY_UP:
@@ -158,10 +158,10 @@ class Menu:
         self._render()
 
     def _h_add_alarm(self, key):
-        # aceita dígitos; backspace com *; confirma com #
+        # accepts digits; backspace with *; confirm with #
         if key in '0123456789' and len(self._input_buf) < 5:
             self._input_buf += key
-            # auto-insere ':'
+            # auto-insert ':'
             if len(self._input_buf) == 2:
                 self._input_buf += ':'
         elif key == KEY_BACK:
@@ -176,13 +176,13 @@ class Menu:
                 ok = self._am.add_alarm(self._sel_med, self._input_buf)
                 if ok:
                     self._bz.beep_ok()
-                    self._d.show_message("Salvo!", self._input_buf)
+                    self._d.show_message("Saved!", self._input_buf)
                 else:
                     self._bz.beep_error()
-                    self._d.show_message("Limite ating.", f"Max {config.MAX_ALARMS_EACH}")
+                    self._d.show_message("Limit reached", f"Max {config.MAX_ALARMS_EACH}")
             else:
                 self._bz.beep_error()
-                self._d.show_message("Hora invalida")
+                self._d.show_message("Invalid time")
             utime.sleep_ms(1000)
             self._state = self._ST_MED_OPT; self._input_buf = ""
         self._render()
@@ -211,7 +211,7 @@ class Menu:
         self._render()
 
     def _h_set_time(self, key):
-        # formato: HH:MM:SS → 8 dígitos com auto ':'
+        # format: HH:MM:SS → 8 digits with auto ':'
         if key in '0123456789' and len(self._input_buf) < 8:
             self._input_buf += key
             if len(self._input_buf) in (2, 5):
@@ -230,18 +230,18 @@ class Menu:
                 if 0 <= h < 24 and 0 <= m < 60 and 0 <= s < 60:
                     self._rtc.set_time(h, m, s)
                     self._bz.beep_ok()
-                    self._d.show_message("Hora salva!", self._input_buf)
+                    self._d.show_message("Time saved!", self._input_buf)
                 else:
                     raise ValueError
             except Exception:
                 self._bz.beep_error()
-                self._d.show_message("Hora invalida")
+                self._d.show_message("Invalid time")
             utime.sleep_ms(1000)
             self._state = self._ST_MAIN; self._input_buf = ""
         self._render()
 
     def _h_set_date(self, key):
-        # formato: DD/MM/AA → 6 dígitos com auto '/'
+        # format: DD/MM/YY → 6 digits with auto '/'
         if key in '0123456789' and len(self._input_buf) < 8:
             self._input_buf += key
             if len(self._input_buf) in (2, 5):
@@ -262,17 +262,17 @@ class Menu:
                     # dt: (year,month,day,weekday,hour,minute,second,0)
                     self._rtc.set_datetime(y, m, d, dt[4], dt[5], dt[6])
                     self._bz.beep_ok()
-                    self._d.show_message("Data salva!", self._input_buf)
+                    self._d.show_message("Date saved!", self._input_buf)
                 else:
                     raise ValueError
             except Exception:
                 self._bz.beep_error()
-                self._d.show_message("Data invalida")
+                self._d.show_message("Invalid date")
             utime.sleep_ms(1000)
             self._state = self._ST_MAIN; self._input_buf = ""
         self._render()
 
-    # ── utilitários ───────────────────────────────────────────────────────────
+    # ── utilities ────────────────────────────────────────────────────────────
 
     def _validate_hhmm(self, s: str) -> bool:
         try:

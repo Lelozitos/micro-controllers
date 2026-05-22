@@ -1,4 +1,4 @@
-# led_ctrl.py — Controle de LEDs indicadores (um por compartimento)
+# led_ctrl.py — Indicator LED control (one per compartment)
 
 from machine import Pin
 import utime
@@ -7,9 +7,9 @@ import config
 
 class LEDController:
     """
-    Gerencia até MAX_MEDS LEDs.
-    Suporta: acender, apagar, piscar não bloqueante.
-    O método update() deve ser chamado no loop principal.
+    Manages up to MAX_MEDS LEDs.
+    Supports: on, off, non-blocking blink.
+    Call update() in the main loop.
     """
 
     def __init__(self):
@@ -31,7 +31,7 @@ class LEDController:
             self._state[index] = False
 
     def blink(self, index: int):
-        """Habilita piscar para o LED index."""
+        """Enable blinking for LED at index."""
         if 0 <= index < config.MAX_MEDS:
             self._blink[index] = True
 
@@ -40,7 +40,7 @@ class LEDController:
             self.off(i)
 
     def update(self):
-        """Chame no loop principal — alterna LEDs em modo blink."""
+        """Call in the main loop — toggles LEDs in blink mode."""
         now = utime.ticks_ms()
         if utime.ticks_diff(now, self._last_t) < config.LED_BLINK_MS:
             return

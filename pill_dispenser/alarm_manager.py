@@ -1,4 +1,4 @@
-# alarm_manager.py — Gerenciamento de alarmes e confirmação de doses
+# alarm_manager.py — Alarm management and dose confirmation
 
 import ujson
 import utime
@@ -6,11 +6,11 @@ import config
 
 
 def _default_alarms():
-    """Estrutura padrão: 4 remédios, sem alarmes configurados."""
+    """Default structure: 4 medicines, no alarms configured."""
     return {
         str(i): {
             "name": config.MED_NAMES[i],
-            "alarms": [],       # lista de "HH:MM"
+            "alarms": [],       # list of "HH:MM"
             "enabled": True,
         }
         for i in range(config.MAX_MEDS)
@@ -19,18 +19,18 @@ def _default_alarms():
 
 class AlarmManager:
     """
-    Persiste alarmes em JSON na memória flash do Pico.
-    Controla estado de alarme ativo e confirmação de dose.
+    Persists alarms to JSON in the Pico's flash memory.
+    Controls active alarm state and dose confirmation.
     """
 
     def __init__(self):
         self._data     = {}
         self._load()
-        # estado de runtime (não persiste)
+        # runtime state (not persisted)
         self._active_alarm  = None   # {med_idx, time_str, fired_at}
-        self._confirmed     = set()  # alarmes já confirmados hoje: "HH:MM-idx"
+        self._confirmed     = set()  # alarms confirmed today: "HH:MM-idx"
 
-    # ── persistência ─────────────────────────────────────────────────────────
+    # ── persistence ──────────────────────────────────────────────────────────
 
     def _load(self):
         try:
@@ -45,9 +45,9 @@ class AlarmManager:
             with open(config.ALARM_FILE, "w") as f:
                 ujson.dump(self._data, f)
         except Exception:
-            pass  # falha silenciosa; próxima inicialização vai recriar
+            pass  # silent failure; next boot will recreate
 
-    # ── manipulação de alarmes ────────────────────────────────────────────────
+    # ── alarm management ─────────────────────────────────────────────────────
 
     def get_med(self, idx: int) -> dict:
         return self._data.get(str(idx), {})
@@ -57,7 +57,7 @@ class AlarmManager:
         self._save()
 
     def add_alarm(self, med_idx: int, time_str: str) -> bool:
-        """Adiciona alarme 'HH:MM'. Retorna False se já está no limite."""
+        """Add alarm 'HH:MM'. Returns False if limit already reached."""
         med = self._data[str(med_idx)]
         if time_str in med["alarms"]:
             return True
@@ -80,7 +80,7 @@ class AlarmManager:
         self._save()
 
     def all_alarms_flat(self) -> list:
-        """Retorna lista de (med_idx, time_str) ordenada por horário."""
+        """Returns list of (med_idx, time_str) sorted by time."""
         result = []
         for idx in range(config.MAX_MEDS):
             med = self._data[str(idx)]
@@ -91,19 +91,19 @@ class AlarmManager:
         return result
 
     def next_alarm(self, current_hhmm: str) -> tuple | None:
-        """Retorna (med_idx, time_str) do próximo alarme após current_hhmm."""
+        """Returns (med_idx, time_str) of the next alarm after current_hhmm."""
         alarms = self.all_alarms_flat()
         for idx, t in alarms:
             if t > current_hhmm:
                 return idx, t
         return alarms[0] if alarms else None  # wrap-around
 
-    # ── detecção de disparo ───────────────────────────────────────────────────
+    # ── trigger detection ─────────────────────────────────────────────────────
 
     def check_trigger(self, h: int, m: int) -> list:
         """
-        Verifica se algum alarme deve disparar agora.
-        Retorna lista de (med_idx, time_str) a disparar.
+        Check if any alarm should fire now.
+        Returns list of (med_idx, time_str) to trigger.
         """
         hhmm = f"{h:02d}:{m:02d}"
         triggered = []
@@ -118,14 +118,14 @@ class AlarmManager:
         return triggered
 
     def confirm_dose(self, med_idx: int, time_str: str):
-        """Marca dose como tomada para este ciclo."""
+        """Mark dose as taken for this cycle."""
         self._confirmed.add(f"{time_str}-{med_idx}")
 
     def reset_daily(self):
-        """Limpa confirmações (chamar na virada da meia-noite)."""
+        """Clear confirmations (call at midnight rollover)."""
         self._confirmed.clear()
 
-    # ── alarme ativo ─────────────────────────────────────────────────────────
+    # ── active alarm ──────────────────────────────────────────────────────────
 
     def set_active(self, med_idx: int, time_str: str):
         self._active_alarm = {

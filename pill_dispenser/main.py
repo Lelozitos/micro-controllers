@@ -1,8 +1,8 @@
-# main.py — Loop principal do sistema de alarme de remédios
+# main.py — Main loop for the medication alarm system
 # Raspberry Pi Pico + MicroPython
 
 import sys
-sys.path.append('/caixa_remedios/lib')  # garante lib/ no path
+sys.path.append('/caixa_remedios/lib')  # ensure lib/ is in path
 
 from machine import I2C, Pin
 import utime
@@ -45,7 +45,7 @@ def safe_init():
     try:
         return init_hardware()
     except Exception as e:
-        print(f"[ERRO init] {e}")
+        print(f"[INIT ERROR] {e}")
         led = Pin(25, Pin.OUT)
         for _ in range(10):
             led.toggle()
@@ -54,7 +54,7 @@ def safe_init():
 
 
 def trigger_alarm(med_idx, time_str, display, leds, buzzer, servo, alarm_mgr):
-    print(f"[ALARME] Remedio {med_idx+1} ({alarm_mgr.med_name(med_idx)}) às {time_str}")
+    print(f"[ALARM] Medicine {med_idx+1} ({alarm_mgr.med_name(med_idx)}) at {time_str}")
     alarm_mgr.set_active(med_idx, time_str)
     leds.blink(med_idx)
     buzzer.beep_alarm()
@@ -67,7 +67,7 @@ def dismiss_alarm(med_idx, time_str, display, leds, servo, buzzer, alarm_mgr):
     leds.off(med_idx)
     servo.close()
     buzzer.beep_confirm()
-    display.show_message("Dose registrada", alarm_mgr.med_name(med_idx)[:16])
+    display.show_message("Dose recorded", alarm_mgr.med_name(med_idx)[:16])
     utime.sleep_ms(1500)
 
 
@@ -76,16 +76,16 @@ def update_clock_screen(rtc, display, alarm_mgr):
     hhmm = f"{h:02d}:{m:02d}"
     time_str = f"  {h:02d}:{m:02d}:{s:02d}  "
     nxt = alarm_mgr.next_alarm(hhmm)
-    next_str = f"Prox:{nxt[1]} {alarm_mgr.med_name(nxt[0])[:6]}" if nxt else "Sem alarmes"
+    next_str = f"Next:{nxt[1]} {alarm_mgr.med_name(nxt[0])[:6]}" if nxt else "No alarms"
     display.show_clock(time_str, next_str)
 
 
 def main():
-    print("[Sistema] Iniciando caixa de remedios...")
+    print("[System] Starting medicine box...")
 
     rtc, display, keypad, servo, pir, leds, buzzer, alarm_mgr, menu = safe_init()
 
-    display.show_message("Caixa Remedios", "Iniciando...", "v1.0")
+    display.show_message("Medicine Box", "Starting...", "v1.0")
     utime.sleep_ms(1500)
     display.clear()
 
@@ -138,7 +138,7 @@ def main():
                                       display, leds, servo, buzzer, alarm_mgr)
                         state = ST_NORMAL
                     elif alarm_mgr.active_timed_out():
-                        print(f"[TIMEOUT] {aa['time_str']}")
+                        print(f"[TIMEOUT] {aa['time_str']} — dose not confirmed")
                         buzzer.beep_error()
                         alarm_mgr.clear_active()
                         leds.off(aa["med_idx"])
@@ -159,14 +159,14 @@ def main():
         except KeyboardInterrupt:
             break
         except Exception as e:
-            print(f"[ERRO loop] {type(e).__name__}: {e}")
+            print(f"[LOOP ERROR] {type(e).__name__}: {e}")
             utime.sleep_ms(500)
 
     leds.all_off()
     servo.close()
     buzzer.silence()
     display.clear()
-    print("[Sistema] Encerrado.")
+    print("[System] Shutdown.")
 
 
 if __name__ == "__main__":

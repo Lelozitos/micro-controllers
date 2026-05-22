@@ -1,4 +1,4 @@
-# display_oled.py — Gerenciador do display OLED SSD1306 128x32
+# display_oled.py — SSD1306 128×32 OLED display manager
 
 from machine import I2C
 import utime
@@ -19,7 +19,7 @@ class OLEDDisplay:
         self._active = True
         self._last_content = ""
 
-    # ── controle de energia ───────────────────────────────────────────────────
+    # ── power control ─────────────────────────────────────────────────────────
 
     def on(self):
         if not self._active:
@@ -35,10 +35,10 @@ class OLEDDisplay:
     def is_on(self):
         return self._active
 
-    # ── tela principal ────────────────────────────────────────────────────────
+    # ── main screens ──────────────────────────────────────────────────────────
 
     def show_clock(self, time_str: str, next_alarm_str: str):
-        """Linha 1: hora atual  |  Linha 2: próximo alarme."""
+        """Line 1: current time  |  Line 2: next alarm."""
         content = time_str + next_alarm_str
         if content == self._last_content:
             return
@@ -49,10 +49,10 @@ class OLEDDisplay:
         self._oled.show()
 
     def show_alarm(self, med_name: str, time_str: str):
-        """Tela de alarme: pisca nome do remédio."""
+        """Alarm screen: shows medicine name."""
         self._oled.fill(0)
-        self._oled.text("!! TOMAR !!", 12, 2, 1)
-        # trunca nome se necessário (max 16 chars a 8px/char)
+        self._oled.text("!! TAKE IT !!", 8, 2, 1)
+        # truncate name if needed (max 16 chars at 8px/char)
         name = med_name[:16]
         x = max(0, (128 - len(name) * 8) // 2)
         self._oled.text(name, x, 14, 1)
@@ -69,7 +69,7 @@ class OLEDDisplay:
         self._oled.show()
 
     def show_menu(self, title: str, options: list, selected: int = -1):
-        """Título + até 2 opções. Cabe em 128x32 (4 linhas × 8px)."""
+        """Title + up to 2 options. Fits 128×32 (4 lines × 8px)."""
         self._oled.fill(0)
         self._oled.text(title[:16], 0, 0, 1)
         self._oled.hline(0, 9, 128, 1)
@@ -81,19 +81,19 @@ class OLEDDisplay:
 
     def show_med_grid(self, names: list):
         """
-        Grade 2x2 — mostra os 4 remédios de uma vez em 128x32.
-        names: lista de 4 strings.
+        2×2 grid — shows all 4 medicines at once on 128×32.
+        names: list of 4 strings.
         Layout:
-          Selec.Remedio
+          Sel.Medicine
           [1]Nnnnn [2]Nnnnn
           [3]Nnnnn [4]Nnnnn
-        Cada célula = 8 chars × 8px = 64px de largura.
+        Each cell = 8 chars × 8px = 64px wide.
         """
         self._oled.fill(0)
-        self._oled.text("Selec.Remedio", 0, 0, 1)
+        self._oled.text("Sel.Medicine", 0, 0, 1)
         for i in range(4):
-            col = i % 2        # 0=esquerda, 1=direita
-            row = i // 2       # 0=linha1, 1=linha2
+            col = i % 2        # 0=left, 1=right
+            row = i // 2       # 0=row1, 1=row2
             name = names[i][:5] if i < len(names) else "-----"
             cell = f"[{i+1}]{name}"   # ex: "[1]Aspir"
             x = col * 64
