@@ -142,7 +142,7 @@ Pico internally regulates 3.3 V for OLED, DS1307, PIR and keypad.
 ## Project Structure
 
 ```
-caixa_remedios/
+pill_dispenser/
 ├── main.py             — main loop + state machine
 ├── config.py           — pin assignments and constants (edit here)
 ├── alarm_manager.py    — alarm CRUD + JSON persistence
@@ -156,7 +156,7 @@ caixa_remedios/
 ├── buzzer.py           — beep patterns (ok, error, alarm)
 └── lib/
     ├── ds1307.py              — DS1307 driver (Mike Causer)
-    ├── matrix_keyboard_4x4.py — keypad driver (Rodrigo França / EEN251)
+    ├── matrix_keyboard_4x4.py — keypad driver (Rodrigo França)
     ├── at24c32n.py            — AT24C32N EEPROM driver
     └── ssd1306.py             — SSD1306 OLED driver
 ```
@@ -168,7 +168,7 @@ caixa_remedios/
 1. Install **Thonny ≥ 4.0** and connect the Pico via USB.
 2. Go to **Run → Configure interpreter → MicroPython (Raspberry Pi Pico)**.
 3. Open the file panel: **View → Files**.
-4. In the left panel (computer), navigate to the `caixa_remedios/` folder.
+4. In the left panel (computer), navigate to the `pill_dispenser/` folder.
 5. Select **all files** and the `lib/` folder. Right-click → **Upload to /**.
 6. Expected structure on the Pico:
    ```
@@ -215,15 +215,20 @@ Display turns off automatically after **30 seconds** with no motion detected by 
         ▼
 2. Compartment LED blinks
    Buzzer plays 3 beeps
+   Display shows "!! APPROACH !!"
+   Servo stays closed — waiting for presence
+        │
+        ▼
+3. PIR detects someone nearby
    Servo spins CW for SERVO_OPEN_MS ms (opens)
-   Display shows "!! TAKE IT !!"
+   Display switches to "!! TAKE IT !!"
         │
         ├── User presses [#] ──► Dose confirmed
         │                         Servo spins CCW for SERVO_CLOSE_MS ms (closes)
         │                         LED turns off
         │                         Buzzer plays confirmation melody
         │
-        └── No response in 60 s ──► Servo closes, system resumes
+        └── No response in 60 s ──► Servo closes (if opened), system resumes
                                     (unconfirmed dose logged to serial)
 ```
 
@@ -231,7 +236,7 @@ Display turns off automatically after **30 seconds** with no motion detected by 
 
 ### Configuration menu
 
-Press **[D]** at any time to open the menu.
+Press **any key** at any time to open the info screen (current time + upcoming alarms). Press any key again to enter the options menu.
 
 ```
 Navigation keys:
@@ -260,9 +265,9 @@ MENU
 
 All included in `lib/` — no extra installation needed.
 
-| Library                  | Source                                                                                 |
-| ------------------------ | -------------------------------------------------------------------------------------- |
-| `ssd1306.py`             | [MicroPython official](https://github.com/micropython/micropython-lib)                 |
-| `ds1307.py`              | [mcauser/micropython-tinyrtc-i2c](https://github.com/mcauser/micropython-tinyrtc-i2c)  |
-| `matrix_keyboard_4x4.py` | [EEN251_Sistemas_Embarcados](https://github.com/rodmarfran/EEN251_Sistemas_Embarcados) |
-| `at24c32n.py`            | [mcauser/micropython-tinyrtc-i2c](https://github.com/mcauser/micropython-tinyrtc-i2c)  |
+| Library                  | Source                                                                                |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| `ssd1306.py`             | [MicroPython official](https://github.com/micropython/micropython-lib)                |
+| `ds1307.py`              | [mcauser/micropython-tinyrtc-i2c](https://github.com/mcauser/micropython-tinyrtc-i2c) |
+| `matrix_keyboard_4x4.py` | [rodmarfran](https://github.com/rodmarfran/EEN251_Sistemas_Embarcados)                |
+| `at24c32n.py`            | [mcauser/micropython-tinyrtc-i2c](https://github.com/mcauser/micropython-tinyrtc-i2c) |

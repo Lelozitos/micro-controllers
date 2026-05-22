@@ -2,7 +2,7 @@
 # Raspberry Pi Pico + MicroPython
 
 import sys
-sys.path.append('/caixa_remedios/lib')  # ensure lib/ is in path
+sys.path.append('/pill_dispenser/lib')  # ensure lib/ is in path
 
 from machine import I2C, Pin
 import utime
@@ -53,19 +53,20 @@ def safe_init():
         raise
 
 
-def trigger_alarm(med_idx, time_str, display, leds, buzzer, servo, alarm_mgr):
+def trigger_alarm(med_idx, time_str, display, leds, buzzer, alarm_mgr):
     print(f"[ALARM] Medicine {med_idx+1} ({alarm_mgr.med_name(med_idx)}) at {time_str}")
     alarm_mgr.set_active(med_idx, time_str)
     leds.blink(med_idx)
     buzzer.beep_alarm()
-    servo.open()
+    # servo opens only on proximity detection (handled in main loop)
 
 
-def dismiss_alarm(med_idx, time_str, display, leds, servo, buzzer, alarm_mgr):
+def dismiss_alarm(med_idx, time_str, display, leds, servo, buzzer, alarm_mgr, servo_opened):
     alarm_mgr.confirm_dose(med_idx, time_str)
     alarm_mgr.clear_active()
     leds.off(med_idx)
-    servo.close()
+    if servo_opened:
+        servo.close()
     buzzer.beep_confirm()
     display.show_message("Dose recorded", alarm_mgr.med_name(med_idx)[:16])
     utime.sleep_ms(1500)
@@ -89,9 +90,10 @@ def main():
     utime.sleep_ms(1500)
     display.clear()
 
-    state       = ST_NORMAL
-    last_min    = -1
-    alarm_queue = []
+    state        = ST_NORMAL
+    last_min     = -1
+    alarm_queue  = []
+    servo_opened = False
 
     while True:
         try:
@@ -116,9 +118,10 @@ def main():
             if state == ST_NORMAL:
                 if alarm_queue:
                     med_idx, t_str = alarm_queue.pop(0)
-                    trigger_alarm(med_idx, t_str, display, leds, buzzer, servo, alarm_mgr)
+                    trigger_alarm(med_idx, t_str, display, leds, buzzer, alarm_mgr)
+                    servo_opened = False
                     state = ST_ALARM
-                elif key == 'D':
+                elif key:
                     menu.open()
                     display.on()
                     state = ST_MENU
@@ -128,21 +131,33 @@ def main():
             elif state == ST_ALARM:
                 aa = alarm_mgr.active_alarm
                 if aa:
-                    display.show_alarm(alarm_mgr.med_name(aa["med_idx"]), f"{h:02d}:{m:02d}")
+                    if servo_opened:
+                        display.show_alarm(alarm_mgr.med_name(aa["med_idx"]), f"{h:02d}:{m:02d}")
+                    else:
+                        display.show_message(alarm_mgr.med_name(aa["med_idx"])[:16],
+                                             "!! APPROACH !!",
+                                             f"{h:02d}:{m:02d}")
+
+                    if presence and not servo_opened:
+                        servo.open()
+                        servo_opened = True
 
                     if s % 10 == 0 and s != 0:
                         buzzer.beep_alarm()
 
                     if key == KEY_OK:
                         dismiss_alarm(aa["med_idx"], aa["time_str"],
-                                      display, leds, servo, buzzer, alarm_mgr)
+                                      display, leds, servo, buzzer, alarm_mgr, servo_opened)
+                        servo_opened = False
                         state = ST_NORMAL
                     elif alarm_mgr.active_timed_out():
                         print(f"[TIMEOUT] {aa['time_str']} — dose not confirmed")
                         buzzer.beep_error()
                         alarm_mgr.clear_active()
                         leds.off(aa["med_idx"])
-                        servo.close()
+                        if servo_opened:
+                            servo.close()
+                        servo_opened = False
                         state = ST_NORMAL
                     elif alarm_queue:
                         leds.blink(alarm_queue[0][0])
@@ -150,6 +165,8 @@ def main():
             elif state == ST_MENU:
                 if key:
                     menu.handle_key(key)
+                else:
+                    menu.tick()
                 if not menu.is_open():
                     state = ST_NORMAL
                     display.clear()
