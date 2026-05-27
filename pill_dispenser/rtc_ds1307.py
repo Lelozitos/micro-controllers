@@ -1,10 +1,10 @@
-# rtc_ds1307.py — DS1307 wrapper using the EEN251 repository lib
+# rtc_ds1307.py — DS1307 wrapper
 # Base library: lib/ds1307.py (Mike Causer / Rodrigo França)
 #
 # Lib base tuple: (year, month, day, weekday, hour, minute, second, 0)
 #                   [0]    [1]    [2]   [3]     [4]   [5]     [6]   [7]
 
-from machine import I2C, Pin
+from machine import I2C
 import config
 
 try:
