@@ -29,19 +29,18 @@ class Menu:
     _ST_CONFIRM_DEL = 8
     _ST_INFO        = 9
 
-    def __init__(self, display, alarm_mgr, rtc, buzzer):
+    def __init__(self, display, alarm_mgr, rtc):
         self._d  = display
         self._am = alarm_mgr
         self._rtc = rtc
-        self._bz  = buzzer
+        # self._bz = buzzer
 
-        self._state     = self._ST_IDLE
-        self._sel_med   = 0
-        self._sel_opt   = 0
-        self._input_buf = ""
+        self._state      = self._ST_IDLE
+        self._sel_med    = 0
+        self._sel_opt    = 0
+        self._input_buf  = ""
         self._alarm_list = []
         self._alarm_sel  = 0
-        self._last_activity = utime.ticks_ms()
 
     # ── public interface ──────────────────────────────────────────────────────
 
@@ -59,7 +58,6 @@ class Menu:
         return self._state != self._ST_IDLE
 
     def handle_key(self, key: str):
-        self._last_activity = utime.ticks_ms()
         handler = {
             self._ST_INFO:        self._h_info,
             self._ST_MAIN:        self._h_main,
@@ -88,40 +86,39 @@ class Menu:
                 upcoming = all_alarms
             alarm_strs = [f"{t} {self._am.med_name(i)[:5]}" for i, t in upcoming[:2]]
             if not alarm_strs:
-                alarm_strs = ["No alarms"]
+                alarm_strs = ["Sem alarmes"]
             d.show_info(time_str, alarm_strs)
 
         elif self._state == self._ST_MAIN:
-            d.show_menu("=== MENU ===", ["1-Medicines", "2-Set time", "3-Set date"], self._sel_opt)
+            d.show_menu("=== MENU ===", ["1-Remedios", "2-Hora", "3-Data"], self._sel_opt)
 
         elif self._state == self._ST_SEL_MED:
-            # 2x2 grid — all 4 medicines visible at once
-            d.show_med_grid([self._am.med_name(i) for i in range(config.MAX_MEDS)])
+            d.show_med_list([self._am.med_name(i) for i in range(config.MAX_MEDS)])
 
         elif self._state == self._ST_MED_OPT:
             name = self._am.med_name(self._sel_med)[:10]
-            d.show_menu(name, ["1-Add alarm", "2-View alarms", "3-Enable/Dis."], self._sel_opt)
+            d.show_menu(name, ["1-Add alarme", "2-Ver alarmes", "3-Ativ/Desativ"], self._sel_opt)
 
         elif self._state == self._ST_ADD_ALARM:
-            d.show_input("Time HH:MM", self._input_buf)
+            d.show_input("Hora HH:MM", self._input_buf)
 
         elif self._state == self._ST_LIST_ALARMS:
             med  = self._am.get_med(self._sel_med)
             alms = med.get("alarms", [])
             if not alms:
-                d.show_message("No alarms", KEY_BACK+"=back")
+                d.show_message("Sem alarmes", KEY_BACK+"=voltar")
             else:
                 item = alms[self._alarm_sel] if self._alarm_sel < len(alms) else "--:--"
-                d.show_menu(f"Alarm {self._alarm_sel+1}/{len(alms)}", [item, KEY_OK+"=del "+KEY_BACK+"=vol"])
+                d.show_menu(f"Alarme {self._alarm_sel+1}/{len(alms)}", [item, KEY_OK+"=del "+KEY_BACK+"=vol"])
 
         elif self._state == self._ST_SET_TIME:
-            d.show_input("Time HH:MM:SS", self._input_buf)
+            d.show_input("Hora HH:MM:SS", self._input_buf)
 
         elif self._state == self._ST_SET_DATE:
-            d.show_input("Date DD/MM/YY", self._input_buf)
+            d.show_input("Data DD/MM/AA", self._input_buf)
 
         elif self._state == self._ST_CONFIRM_DEL:
-            d.show_message("Delete?", KEY_OK+"=yes  "+KEY_BACK+"=no")
+            d.show_message("Excluir?", KEY_OK+"=sim  "+KEY_BACK+"=nao")
 
     # ── state handlers ────────────────────────────────────────────────────────
 
@@ -130,7 +127,7 @@ class Menu:
             self._close(); return
         self._state = self._ST_MAIN
         self._sel_opt = 0
-        self._d._last_content = ""  # force redraw
+        self._d.clear_cache()
         self._render()
 
     def _h_main(self, key):
@@ -156,8 +153,7 @@ class Menu:
     def _open_set_date(self): self._state = self._ST_SET_DATE; self._input_buf = ""; self._render()
 
     def _h_sel_med(self, key):
-        # 2x2 grid visible — select directly by number
-        if key in '1234':
+        if key in '123':
             self._sel_med = int(key) - 1
             self._state = self._ST_MED_OPT; self._sel_opt = 0
         elif key == KEY_BACK:
@@ -171,9 +167,9 @@ class Menu:
             self._alarm_sel = 0; self._state = self._ST_LIST_ALARMS
         elif key == '3' or (key == KEY_OK and self._sel_opt == 2):
             self._am.toggle_med(self._sel_med)
-            self._bz.beep_short()
+            # self._bz.beep_short()
             med = self._am.get_med(self._sel_med)
-            status = "Enabled" if med["enabled"] else "Disabled"
+            status = "Ativado" if med["enabled"] else "Desativado"
             self._d.show_message(med["name"][:16], status)
             utime.sleep_ms(1200)
         elif key == KEY_UP:
@@ -202,14 +198,14 @@ class Menu:
             if self._validate_hhmm(self._input_buf):
                 ok = self._am.add_alarm(self._sel_med, self._input_buf)
                 if ok:
-                    self._bz.beep_ok()
-                    self._d.show_message("Saved!", self._input_buf)
+                    # self._bz.beep_ok()
+                    self._d.show_message("Salvo!", self._input_buf)
                 else:
-                    self._bz.beep_error()
-                    self._d.show_message("Limit reached", f"Max {config.MAX_ALARMS_EACH}")
+                    # self._bz.beep_error()
+                    self._d.show_message("Limite ating.", f"Max {config.MAX_ALARMS_EACH}")
             else:
-                self._bz.beep_error()
-                self._d.show_message("Invalid time")
+                # self._bz.beep_error()
+                self._d.show_message("Hora invalida")
             utime.sleep_ms(1000)
             self._state = self._ST_MED_OPT; self._input_buf = ""
         self._render()
@@ -233,7 +229,7 @@ class Menu:
             alms = med.get("alarms", [])
             if self._alarm_sel < len(alms):
                 self._am.remove_alarm(self._sel_med, alms[self._alarm_sel])
-                self._bz.beep_short()
+                # self._bz.beep_short()
         self._state = self._ST_LIST_ALARMS; self._alarm_sel = 0
         self._render()
 
@@ -256,13 +252,13 @@ class Menu:
                 h, m, s = int(parts[0]), int(parts[1]), int(parts[2])
                 if 0 <= h < 24 and 0 <= m < 60 and 0 <= s < 60:
                     self._rtc.set_time(h, m, s)
-                    self._bz.beep_ok()
-                    self._d.show_message("Time saved!", self._input_buf)
+                    # self._bz.beep_ok()
+                    self._d.show_message("Hora salva!", self._input_buf)
                 else:
                     raise ValueError
             except Exception:
-                self._bz.beep_error()
-                self._d.show_message("Invalid time")
+                # self._bz.beep_error()
+                self._d.show_message("Hora invalida")
             utime.sleep_ms(1000)
             self._state = self._ST_MAIN; self._input_buf = ""
         self._render()
@@ -288,13 +284,13 @@ class Menu:
                     dt = self._rtc.datetime()
                     # dt: (year,month,day,weekday,hour,minute,second,0)
                     self._rtc.set_datetime(y, m, d, dt[4], dt[5], dt[6])
-                    self._bz.beep_ok()
-                    self._d.show_message("Date saved!", self._input_buf)
+                    # self._bz.beep_ok()
+                    self._d.show_message("Data salva!", self._input_buf)
                 else:
                     raise ValueError
             except Exception:
-                self._bz.beep_error()
-                self._d.show_message("Invalid date")
+                # self._bz.beep_error()
+                self._d.show_message("Data invalida")
             utime.sleep_ms(1000)
             self._state = self._ST_MAIN; self._input_buf = ""
         self._render()

@@ -90,7 +90,7 @@ class AlarmManager:
         result.sort(key=lambda x: x[1])
         return result
 
-    def next_alarm(self, current_hhmm: str) -> tuple | None:
+    def next_alarm(self, current_hhmm: str):
         """Returns (med_idx, time_str) of the next alarm after current_hhmm."""
         alarms = self.all_alarms_flat()
         for idx, t in alarms:
