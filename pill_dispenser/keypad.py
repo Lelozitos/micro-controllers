@@ -1,4 +1,4 @@
-# keypad.py — 4×4 matrix keypad wrapper using the EEN251 repository lib
+# keypad.py — 4×4 matrix keypad wrapper
 # Base library: lib/matrix_keyboard_4x4.py (Rodrigo França)
 
 import config
@@ -13,16 +13,14 @@ class Keypad:
     """
     Wrapper over MatrixKeyboard exposing a scan() API compatible with main.py.
 
-    Expected wiring (EEN251 repo key_map):
-      rows_pins[0] → bottom row of physical keypad  (*, 0, #, D)
-      rows_pins[3] → top row of physical keypad  (1, 2, 3, A)
+    Wiring (KEYPAD_ROWS reversed top→bottom):
+      rows_pins[0] → top row    (1, 2, 3, A)
+      rows_pins[3] → bottom row (*, 0, #, D)
       cols_pins[0] → right column (D, C, B, A)
-      cols_pins[3] → left column (*, 7, 4, 1)
+      cols_pins[3] → left column  (*, 7, 4, 1)
 
-    Menu navigation keys:
-      A = up / increment    B = down / decrement
-      # = confirm           * = back / cancel
-      D = open menu
+    Menu navigation:
+      [A] up   [B] down   [#] confirm   [*] back   [D] open menu
     """
 
     def __init__(self):
