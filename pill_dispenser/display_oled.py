@@ -44,14 +44,14 @@ class OLEDDisplay:
             return
         self._last_content = content
         self._oled.fill(0)
-        self._oled.text(time_str, 20, 2, 1)
+        self._oled.text(time_str, 20, 0, 1)
         self._oled.text(next_alarm_str, 0, 18, 1)
         self._oled.show()
 
     def show_alarm(self, med_name: str, time_str: str):
         """Alarm screen: shows medicine name."""
         self._oled.fill(0)
-        self._oled.text("!! TAKE IT !!", 8, 2, 1)
+        self._oled.text("!! TOME JA !!", 8, 2, 1)
         # truncate name if needed (max 16 chars at 8px/char)
         name = med_name[:16]
         x = max(0, (128 - len(name) * 8) // 2)
@@ -69,36 +69,20 @@ class OLEDDisplay:
         self._oled.show()
 
     def show_menu(self, title: str, options: list, selected: int = -1):
-        """Title + up to 2 options. Fits 128×32 (4 lines × 8px)."""
+        """Title + up to 3 options. 128×32 = 4 rows × 8px, no separator."""
         self._oled.fill(0)
         self._oled.text(title[:16], 0, 0, 1)
-        self._oled.hline(0, 9, 128, 1)
-        for i, opt in enumerate(options[:2]):
-            y = 12 + i * 10
+        for i, opt in enumerate(options[:3]):
             prefix = ">" if i == selected else " "
-            self._oled.text(f"{prefix}{opt}"[:16], 0, y, 1)
+            self._oled.text(f"{prefix}{opt}"[:16], 0, 8 + i * 8, 1)
         self._oled.show()
 
-    def show_med_grid(self, names: list):
-        """
-        2×2 grid — shows all 4 medicines at once on 128×32.
-        names: list of 4 strings.
-        Layout:
-          Sel.Medicine
-          [1]Nnnnn [2]Nnnnn
-          [3]Nnnnn [4]Nnnnn
-        Each cell = 8 chars × 8px = 64px wide.
-        """
+    def show_med_list(self, names: list):
+        """Vertical list of up to 3 medicines. 128×32 = 4 rows × 8px."""
         self._oled.fill(0)
-        self._oled.text("Sel.Medicine", 0, 0, 1)
-        for i in range(4):
-            col = i % 2        # 0=left, 1=right
-            row = i // 2       # 0=row1, 1=row2
-            name = names[i][:5] if i < len(names) else "-----"
-            cell = f"[{i+1}]{name}"   # ex: "[1]Aspir"
-            x = col * 64
-            y = 12 + row * 10
-            self._oled.text(cell[:8], x, y, 1)
+        self._oled.text("Sel.Remedio:", 0, 0, 1)
+        for i, name in enumerate(names[:3]):
+            self._oled.text(f"[{i+1}]{name[:13]}", 0, 8 + i * 8, 1)
         self._oled.show()
 
     def show_info(self, time_str: str, alarms: list):
@@ -124,4 +108,7 @@ class OLEDDisplay:
     def clear(self):
         self._oled.fill(0)
         self._oled.show()
+        self._last_content = ""
+
+    def clear_cache(self):
         self._last_content = ""
