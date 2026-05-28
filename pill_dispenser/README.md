@@ -122,7 +122,6 @@ One LED per medicine compartment. Each LED requires a **330 Ω resistor** in ser
 | Medicine 1  | GP18      | Green            |
 | Medicine 2  | GP19      | Blue             |
 | Medicine 3  | GP20      | Yellow           |
-| Medicine 4  | GP21      | Red              |
 
 ---
 
@@ -157,7 +156,6 @@ pill_dispenser/
 └── lib/
     ├── ds1307.py              — DS1307 driver (Mike Causer)
     ├── matrix_keyboard_4x4.py — keypad driver (Rodrigo França)
-    ├── at24c32n.py            — AT24C32N EEPROM driver
     └── ssd1306.py             — SSD1306 OLED driver
 ```
 
@@ -185,7 +183,6 @@ pill_dispenser/
    /buzzer.py
    /lib/ds1307.py
    /lib/matrix_keyboard_4x4.py
-   /lib/at24c32n.py
    /lib/ssd1306.py
    ```
 7. Press **F5** with `main.py` open to run. The Pico runs `main.py` automatically on power-up.
@@ -270,4 +267,3 @@ All included in `lib/` — no extra installation needed.
 | `ssd1306.py`             | [MicroPython official](https://github.com/micropython/micropython-lib)                |
 | `ds1307.py`              | [mcauser/micropython-tinyrtc-i2c](https://github.com/mcauser/micropython-tinyrtc-i2c) |
 | `matrix_keyboard_4x4.py` | [rodmarfran](https://github.com/rodmarfran/EEN251_Sistemas_Embarcados)                |
-| `at24c32n.py`            | [mcauser/micropython-tinyrtc-i2c](https://github.com/mcauser/micropython-tinyrtc-i2c) |
