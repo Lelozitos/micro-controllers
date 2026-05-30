@@ -18,7 +18,7 @@ Raspberry Pi Pico + MicroPython — Medication alarm system with servo, OLED dis
 | Display         | OLED SSD1306 128×32 I2C          |
 | Clock           | RTC DS1307 (Tiny RTC I2C module) |
 | Keypad          | 4×4 Matrix                       |
-| Servo           | SM-S4303R (continuous rotation)  |
+| Servo           | HX5010 (positional)              |
 | Motion sensor   | HC-SR501 (PIR)                   |
 | LEDs            | 4× colored LED + 330 Ω resistor  |
 | Buzzer          | Passive buzzer                   |
@@ -44,26 +44,23 @@ Raspberry Pi Pico + MicroPython — Medication alarm system with servo, OLED dis
 
 ---
 
-### Servo SM-S4303R
+### Servo HX5010
 
 | Pico pin | GPIO | Servo wire             |
 | -------- | ---- | ---------------------- |
-| GP2      | PWM  | Signal (orange/yellow) |
+| GP5      | PWM  | Signal (orange/yellow) |
 | VSYS     | 5 V  | VCC (red)              |
 | GND      | GND  | GND (brown/black)      |
 
-The SM-S4303R is a **continuous rotation servo** — no angular position, it spins as long as the PWM pulse deviates from 1500 µs:
+The HX5010 is a **positional servo** — holds the commanded angle via 50 Hz PWM:
 
-| Pulse    | Behaviour        |
-| -------- | ---------------- |
-| ~1000 µs | CW spin (open)   |
-| ~1500 µs | stopped          |
-| ~2000 µs | CCW spin (close) |
+| Pulse    | Angle        |
+| -------- | ------------ |
+| 500 µs   | 0° (closed)  |
+| 1500 µs  | 90°          |
+| 2500 µs  | 180°         |
 
-The code spins for a fixed duration (`SERVO_OPEN_MS` / `SERVO_CLOSE_MS` in `config.py`) then sends the stop pulse.
-
-> **Calibration:** if the servo drifts (spins slowly at rest), adjust `SERVO_STOP_US` in `config.py` by ±50 µs until it stops completely.  
-> Adjust `SERVO_OPEN_MS` and `SERVO_CLOSE_MS` to match the mechanical travel of your mechanism.
+Set `SERVO_OPEN_DEG` and `SERVO_CLOSE_DEG` in `config.py` to match your mechanism's travel.
 
 ---
 
@@ -211,22 +208,14 @@ Display turns off automatically after **30 seconds** with no motion detected by 
         │
         ▼
 2. Compartment LED blinks
-   Buzzer plays 3 beeps
-   Display shows "!! APPROACH !!"
-   Servo stays closed — waiting for presence
-        │
-        ▼
-3. PIR detects someone nearby
-   Servo spins CW for SERVO_OPEN_MS ms (opens)
-   Display switches to "!! TAKE IT !!"
+   Servo opens (SERVO_OPEN_DEG)
+   Display shows "!! TOME JA !!"
         │
         ├── User presses [#] ──► Dose confirmed
-        │                         Servo spins CCW for SERVO_CLOSE_MS ms (closes)
+        │                         Servo closes (SERVO_CLOSE_DEG)
         │                         LED turns off
-        │                         Buzzer plays confirmation melody
         │
-        └── No response in 60 s ──► Servo closes (if opened), system resumes
-                                    (unconfirmed dose logged to serial)
+        └── No response in 60 s ──► Servo closes, system resumes
 ```
 
 ---
@@ -241,13 +230,12 @@ Navigation keys:
   [B] = down / decrement
   [#] = confirm / select
   [*] = back / cancel
-  [D] = open menu
 ```
 
 ```
 MENU
-  1 – Medicines
-        ├─ Select [1]–[4] (all visible in 2×2 grid)
+  1 – Remedios
+        ├─ Select [1]–[3] (vertical list)
         │     ├─ 1 – Add alarm     → type HH:MM + [#]
         │     ├─ 2 – View alarms   → [#] deletes, [*] back
         │     └─ 3 – Enable/Disable
