@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Race Timing Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="bg-glow"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◆</span>
+      <span class="brand-name">RACE TIMING</span>
+    </div>
+    <div class="conn" id="conn">
+      <span class="conn-dot" id="conn-dot"></span>
+      <span id="conn-label">connecting…</span>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="state-card" id="state-card">
+      <div class="state-label" id="state-label">READY</div>
+      <div class="clock" id="clock">00:00.00</div>
+      <div class="state-sub" id="state-sub">waiting for start signal</div>
+    </section>
+
+    <section class="board">
+      <div class="board-head">
+        <span>POS</span>
+        <span>RACER</span>
+        <span>TIME</span>
+      </div>
+      <ol class="board-list" id="board-list">
+        <li class="empty-row" id="empty-row">No finishers yet</li>
+      </ol>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
