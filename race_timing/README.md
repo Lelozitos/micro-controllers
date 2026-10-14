@@ -232,7 +232,7 @@ A1B2C3D4,Alice
 E5F60718,Bob
 ```
 
-To find a tag's ID: start the timer, start a race (wait for green, then a few seconds more), and hold the tag to the reader. The console prints `UNKNOWN_TAG:A1B2C3D4  lap 1 ...` — copy that 8-character ID into `racers.csv`. The file is read when the timer starts, so restart it after editing.
+To find a tag's ID: start the timer (no race needed) and hold the tag flat on the reader. The console prints `Tag on reader: A1B2C3D4  (UNKNOWN_TAG:A1B2C3D4)` — copy that 8-character ID into `racers.csv` with the racer's name, save, and restart the timer (the file is read at start-up). Hold the tag again: it now shows `Tag on reader: A1B2C3D4  (Alice)`.
 
 ---
 
