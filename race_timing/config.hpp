@@ -10,13 +10,13 @@ namespace config {
 
 // RC522 (MFRC522, 13.56 MHz) reader at the finish line, on SPI0 CE0.
 const std::string RFID_SPI_DEVICE = "/dev/spidev0.0";
-constexpr int RFID_RST_PIN = 25;               // RC522 RST, physical pin 22
+constexpr int RFID_RST_PIN = -1;               // RC522 RST wired to 3.3V (or a GPIO number to drive it)
 constexpr int RFID_POLL_MS = 50;               // how often to look for a card
 
 constexpr int START_BUTTON_PIN = 22;
 constexpr int RESET_BUTTON_PIN = 23;
 constexpr int READY_LED_PIN = 24;    // red   = idle, race can start (physical pin 18)
-constexpr int RUNNING_LED_PIN = 26;  // green = race in progress     (physical pin 37)
+constexpr int RUNNING_LED_PIN = 25;  // green = race in progress     (physical pin 22)
 
 // F1-style start lights: they come on one by one, stay lit for a random
 // hold, then all go out at once = GO. The order they light in can be changed
@@ -24,8 +24,8 @@ constexpr int RUNNING_LED_PIN = 26;  // green = race in progress     (physical p
 constexpr int COUNTDOWN_LED_PINS[] = {5, 6, 13};  // physical pins 29, 31, 33
 constexpr int COUNTDOWN_LED_COUNT = sizeof(COUNTDOWN_LED_PINS) / sizeof(COUNTDOWN_LED_PINS[0]);
 constexpr int COUNTDOWN_STEP_MS = 1000;      // gap between lights coming on
-constexpr int COUNTDOWN_HOLD_MIN_MS = 2000;  // after the last light comes on, all stay lit
-constexpr int COUNTDOWN_HOLD_MAX_MS = 6000;  // for a random 2-6 s, then lights out
+constexpr int COUNTDOWN_HOLD_MIN_MS = 1000;  // after the last light comes on, all stay lit
+constexpr int COUNTDOWN_HOLD_MAX_MS = 3000;  // for a random 1-3 s, then lights out
 
 // Lap race: every read of a racer's tag at the line is a lap. The first to
 // complete the set number of laps (chosen on the dashboard) wins.
