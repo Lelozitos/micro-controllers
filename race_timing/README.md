@@ -17,29 +17,37 @@ Racers cross the finish line one at a time (running race, single lane); the syst
 | Component             | Model                                                             |
 | ---------------------- | -------------------------------------------------------------------- |
 | Single-board computer  | Raspberry Pi 4                                                       |
-| Racer identification   | RDM6300 125 kHz RFID reader module, wired via USB-TTL adapter        |
-| RFID tags              | 125 kHz EM4100 keyfob/card, one per racer                            |
+| Racer identification   | RC522 (MFRC522) 13.56 MHz RFID reader, wired to the Pi's SPI pins    |
+| RFID tags              | 13.56 MHz MIFARE card/keyfob (the ones sold with the RC522), one per racer |
 | Start button           | Momentary pushbutton                                                 |
 | Reset button           | Momentary pushbutton                                                 |
 | Status LEDs            | Red (ready) + green (race running), 330 Ω resistors                  |
-| Countdown lights       | 3 × red LED, 330 Ω resistors                                         |
-| Buzzer                 | Active/passive buzzer                                                |
+| Start lights (F1)      | 3 × red LED, 330 Ω resistors                                         |
 | Power supply           | 5 V 3 A USB-C adapter                                                |
 
 ---
 
 ## Why RFID: knowing *who* crossed
 
-Each racer wears/carries a 125 kHz tag. The RDM6300 at the finish line streams the tag ID continuously while it's in range; the first read of a tag during a race is that racer's finish, and the name is looked up in `racers.csv`.
+Each racer carries a 13.56 MHz card or keyfob. The Pi asks the RC522 at the line for a card every 50 ms; when a racer holds their tag to the reader, its ID (UID) is read and looked up in `racers.csv`. **Every pass of the line is a lap.**
 
 ```
-racer reaches the reader ──► tag read (~5-8 cm range)
+racer reaches the reader ──► tag read (~3 cm range)
                                    │
                                    ▼
-          first read of this tag this race? ──► logged as next finisher
+     same tag read < 3 s ago? ──yes──► ignored (still the same pass — the
+                                   │              reader repeats every 50 ms)
+                                   no
+                                   ▼
+                     lap counted (lap time + total time)
                                    │
-                                   no ──► ignored (reader repeats every ~150 ms)
+                                   ▼
+        reached the set number of laps? ──yes──► WINNER, chequered flag
+        or flag already out?                     (others: classified on
+                                                  their next pass)
 ```
+
+The 3 s gap is `MIN_LAP_S` in `config.hpp`; it also stops a tag held at the line when the lights go out from counting as a lap.
 
 Tags not listed in `racers.csv` are still logged, as `UNKNOWN_TAG:<id>` — handy for finding out a new tag's ID (see [Registering racers](#registering-racers)).
 
@@ -47,17 +55,29 @@ Tags not listed in `racers.csv` are still logged, as `UNKNOWN_TAG:<id>` — hand
 
 ## Wiring
 
-### RFID reader (RDM6300)
+### RFID reader (RC522)
 
-The RDM6300 outputs plain UART (TTL) and does not need SPI/I2C — connect it through a USB-TTL adapter, exposed as `/dev/ttyUSB0`.
+The RC522 connects straight to the Pi's pins over SPI — no adapter. It runs on **3.3 V only**: never connect its 3.3V pin to 5V.
 
-| USB-TTL adapter | RDM6300 pin | Notes                        |
-| ----------------- | ------------ | ------------------------------ |
-| 5V                | VCC          |                                 |
-| GND               | GND          |                                 |
-| RX                | TX           | reader only transmits, RX unused |
+| RC522 pin  | Pi physical pin | Pi GPIO (BCM)   |
+| ---------- | --------------- | --------------- |
+| SDA (SS)   | 24              | GPIO8 (SPI CE0) |
+| SCK        | 23              | GPIO11 (SCLK)   |
+| MOSI       | 19              | GPIO10 (MOSI)   |
+| MISO       | 21              | GPIO9 (MISO)    |
+| IRQ        | — not connected | —               |
+| GND        | 20 (any GND)    | —               |
+| RST        | 22              | GPIO25          |
+| 3.3V       | 17 (or 1)       | 3.3 V           |
 
-Mount the reader's coil right at the finish line; racers must bring their tag within a few cm of it.
+SPI must be enabled once (it's off by default):
+
+```bash
+sudo raspi-config nonint do_spi 0     # or: sudo raspi-config → Interface Options → SPI → Yes
+ls /dev/spidev0.0                     # must exist
+```
+
+Mount the reader right at the finish line; racers must hold their tag within ~3 cm of it.
 
 ### Start / Reset buttons
 
@@ -68,28 +88,26 @@ Mount the reader's coil right at the finish line; racers must bring their tag wi
 
 Internal pull-ups are enabled in software — wire the other leg straight to GND.
 
-### Status LEDs, countdown lights & buzzer
+### Status LEDs & countdown lights
 
 | Pi 4 pin (BCM) | Physical pin | Part                                   |
 | --------------- | ------------ | ---------------------------------------- |
 | GPIO24          | 18           | Red LED — ready, race can start          |
-| GPIO25          | 22           | Green LED — race in progress             |
-| GPIO5           | 29           | Countdown red LED 1                      |
-| GPIO6           | 31           | Countdown red LED 2                      |
-| GPIO13          | 33           | Countdown red LED 3                      |
-| GPIO18          | 12           | Buzzer +                                 |
-| GND             | 14           | Buzzer −                                 |
+| GPIO26          | 37           | Green LED — race in progress             |
+| GPIO5           | 29           | Start light A (red)                      |
+| GPIO6           | 31           | Start light B (red)                      |
+| GPIO13          | 33           | Start light C (red)                      |
 
 Each LED: GPIO pin → 330 Ω resistor → LED long leg (anode); LED short leg (cathode) → GND.
 
 | Light                | Meaning                                         |
 | -------------------- | ------------------------------------------------ |
 | Red (GPIO24)         | Ready — press START to begin a race              |
-| Countdown 1 → 2 → 3  | Starting — one more light each second            |
-| All countdown off    | GO — race clock starts                           |
-| Green (GPIO25)       | Race in progress — finishes are being recorded   |
+| Start lights on 1 → 2 → 3 | Starting — one more light each second (order set from the dashboard) |
+| All lit, then all off at once | Lights out = GO — race clock starts. The hold with all lit is random (2–6 s), like F1, so nobody can anticipate it |
+| Green (GPIO26)       | Race in progress — laps are being recorded; blinks off briefly each time a lap is counted. Stays on after the chequered flag until RESET |
 
-All pins are set in `config.hpp` (`READY_LED_PIN`, `RUNNING_LED_PIN`, `COUNTDOWN_LED_PINS`, `COUNTDOWN_STEP_MS`) — change them there and rebuild if you wire differently.
+All pins and timings are set in `config.hpp` (`READY_LED_PIN`, `RUNNING_LED_PIN`, `COUNTDOWN_LED_PINS`, `COUNTDOWN_STEP_MS`, `COUNTDOWN_HOLD_MIN_MS`/`MAX_MS`) — change them there and rebuild if you wire differently. The order the start lights come on in is changed from the dashboard (see [Local Web Dashboard](#local-web-dashboard)), not in the code; it's saved in `race_settings.txt` together with the number of laps.
 
 ---
 
@@ -99,16 +117,17 @@ All pins are set in `config.hpp` (`READY_LED_PIN`, `RUNNING_LED_PIN`, `COUNTDOWN
 race_timing/
 ├── CMakeLists.txt
 ├── config.hpp            — pin map, countdown timing, RFID port, MQTT settings
-├── main.cpp               — button callbacks, countdown, race loop
-├── gpio_io.hpp/.cpp       — ready/running LEDs, countdown lights, buzzer via pigpio
-├── rfid_reader.hpp/.cpp   — background thread parsing RDM6300 UART frames, one callback per read
+├── main.cpp               — buttons + dashboard commands, F1 start lights, race loop
+├── gpio_io.hpp/.cpp       — ready/running LEDs, countdown lights, RC522 reset pin via pigpio
+├── rfid_reader.hpp/.cpp   — RC522 driver over SPI (spidev), polls for cards in a background thread
 ├── race_manager.hpp/.cpp  — race state machine, racer lookup, CSV log
-├── mqtt_publisher.hpp/.cpp — Ubidots MQTT publish (libmosquitto)
+├── mqtt_publisher.hpp/.cpp — MQTT link: race events out, dashboard commands in (libmosquitto)
 ├── racers.csv             — "tag_id,name" roster, one line per racer
-├── race_log.csv           — created automatically, one row per finisher
+├── race_log.csv           — created automatically, one row per lap (saved on RESET)
+├── race_settings.txt      — created automatically: laps + start light order set from the dashboard
 └── dashboard/             — local web dashboard (Node.js), see below
     ├── package.json
-    ├── server.js          — MQTT ⇄ Socket.IO bridge
+    ├── server.js          — MQTT ⇄ Socket.IO bridge, forwards START/RESET/light-order commands
     └── public/            — the dashboard page (HTML/CSS/JS)
 ```
 
@@ -157,7 +176,7 @@ cd ~/race_timing
 Edit `config.hpp`:
 - `MQTT_HOST` = `"localhost"` (Mosquitto running on the Pi itself)
 - `MQTT_TOKEN` = `""` (empty — local Mosquitto has no auth by default)
-- confirm `RFID_PORT` (`ls /dev/ttyUSB*` after plugging in the RDM6300's USB-TTL adapter to see what it enumerated as)
+- enable SPI for the RC522: `sudo raspi-config nonint do_spi 0`, then check `ls /dev/spidev0.0`
 
 Edit `racers.csv` with the real racer tag IDs (see [Registering racers](#registering-racers)).
 
@@ -203,11 +222,11 @@ Press START (physical button) — the 3 countdown lights come on one by one, the
 `racers.csv` has one `tag_id,name` line per racer:
 
 ```
-0A00B1C2D3,Alice
-0A00B1C2D4,Bob
+A1B2C3D4,Alice
+E5F60718,Bob
 ```
 
-To find a tag's ID: start the timer, run a race (START, wait for green), and hold the tag to the reader. The console prints `[#1] UNKNOWN_TAG:0A00B1C2D3 ...` — copy that 10-character ID into `racers.csv`. The file is read when the timer starts, so restart it after editing.
+To find a tag's ID: start the timer, start a race (wait for green, then a few seconds more), and hold the tag to the reader. The console prints `UNKNOWN_TAG:A1B2C3D4  lap 1 ...` — copy that 8-character ID into `racers.csv`. The file is read when the timer starts, so restart it after editing.
 
 ---
 
@@ -216,29 +235,35 @@ To find a tag's ID: start the timer, run a race (START, wait for green), and hol
 ### Race cycle
 
 ```
-1. [START] button pressed (red "ready" LED goes off)
+1. START pressed — physical button or dashboard (red "ready" LED goes off)
         │
         ▼
-2. Countdown: red lights 1, 2, 3 come on one per second (beep each)
-        │   (RESET during the countdown aborts back to ready)
+2. Start lights come on one by one, one per second, in the saved order
+        │   (RESET during the lights aborts back to ready)
         ▼
-3. All three go out → GO: race state → running, green LED on, long beep
+3. All lit for a random 2–6 s, then all go out at once
         │
         ▼
-4. A racer's tag is read at the finish line (first read this race only)
+   Lights out = GO: race state → running, green LED on
+        │
+        ▼
+4. A racer passes the reader → lap counted (ignored if same tag < 3 s ago)
         │
         ├── tag resolved to a racer name via racers.csv
-        ├── elapsed = now - race_start recorded, finish order incremented
-        ├── short beep, printed to console
-        └── published via MQTT with racer name + place
+        ├── lap number, lap time and total time recorded
+        ├── green LED blinks, printed to console, sent to the dashboard
         │
         ▼
-   (repeat step 4 for every racer)
+5. First racer to complete the set laps → WINNER, chequered flag
         │
         ▼
-5. [RESET] button pressed
+6. Every other racer is classified (2nd, 3rd, …) on their next pass,
+   with however many laps they had — like F1
         │
-        ├── all finishes appended to race_log.csv
+        ▼
+7. RESET pressed — physical button or dashboard
+        │
+        ├── every lap appended to race_log.csv
         └── red "ready" LED on, green off, state → idle
 ```
 
@@ -249,9 +274,9 @@ To find a tag's ID: start the timer, run a race (START, wait for green), and hol
 Once the code builds, work through these in order on the real hardware:
 
 1. **Stop anything holding the GPIO**: `sudo pkill race_timer; sudo systemctl disable --now pigpiod`.
-2. **Wire the LEDs** per [Status LEDs, countdown lights & buzzer](#status-leds-countdown-lights--buzzer) and start the timer (`sudo ./build/race_timer` from the project folder) — the red ready LED should light.
+2. **Wire the LEDs** per [Status LEDs & countdown lights](#status-leds--countdown-lights) and start the timer (`sudo ./build/race_timer` from the project folder) — the red ready LED should light.
 3. **Test the buttons**: START → countdown 1, 2, 3 → all off → green. RESET → red again. If nothing happens, see [Troubleshooting](#troubleshooting).
-4. **Plug in the RFID reader** and check it appears: `ls /dev/ttyUSB*`. Restart the timer — the `no RFID reader` warning must be gone.
+4. **Wire the RC522 and enable SPI** per [RFID reader (RC522)](#rfid-reader-rc522). Restart the timer — it must print `RC522 reader ready`, not a warning.
 5. **Register the tags** in `racers.csv` (see [Registering racers](#registering-racers)) and restart the timer.
 6. **Full run with the dashboard open** at `http://<Pi's IP>:3000`: START → countdown → GO → hold a tag to the reader → racer appears on the leaderboard → RESET.
 7. Optionally delete old test entries from `race_log.csv`, and set up [auto-start on boot](#start-automatically-on-boot-systemd).
@@ -353,12 +378,18 @@ While the service is running, starting `race_timer` by hand fails with `Can't lo
 
 ## Telemetry: MQTT
 
-By default (`config.hpp`) the timer publishes to the local Mosquitto broker on the Pi (`MQTT_HOST = "localhost"`, `MQTT_TOKEN = ""`), which is what the local dashboard reads. Every event goes to two plain topics:
+By default (`config.hpp`) the timer publishes to the local Mosquitto broker on the Pi (`MQTT_HOST = "localhost"`, `MQTT_TOKEN = ""`), which is what the local dashboard reads. Topics:
 
-| Topic          | Payload                                                    | When                    |
-| -------------- | ----------------------------------------------------------- | ----------------------- |
-| `race/state`   | `{"state":"running","started_at":<epoch_ms>}` or `{"state":"idle"}` | GO (end of countdown) / RESET / timer start-up |
-| `race/finish`  | `{"place":1,"racer":"Alice","elapsed_s":12.4}`             | each racer's first tag read during a race |
+| Topic          | Direction | Payload                                                    | When                    |
+| -------------- | --------- | ----------------------------------------------------------- | ----------------------- |
+| `race/state`   | timer → | `{"state":"countdown","lit":N}`, `{"state":"running","started_at":<epoch_ms>,"laps":N}`, `{"state":"finished","winner":"Alice","elapsed_s":160.4,"laps":N}` or `{"state":"idle"}` | each start light / lights out / chequered flag / RESET / timer start-up |
+| `race/lap`     | timer → | `{"tag":"A1B2C3D4","racer":"Alice","lap":2,"lap_time_s":31.2,"elapsed_s":63.0}` | every counted lap |
+| `race/finish`  | timer → | `{"place":1,"tag":"A1B2C3D4","racer":"Alice","laps":5,"elapsed_s":160.4}` | a racer is classified (winner, then the others on their next pass) |
+| `race/config`  | timer → (retained) | `{"led_order":[2,0,1],"led_pins":[5,6,13],"laps":5}` | timer start-up / settings changed |
+| `race/timer`   | timer → (retained) | `online` / `offline` (MQTT last will)                | timer connects / stops or crashes |
+| `race/command` | → timer | `{"cmd":"start"}`, `{"cmd":"reset"}`, `{"cmd":"set_led_order","order":[2,0,1]}`, `{"cmd":"test_led","led":0}`, `{"cmd":"set_laps","laps":5}` | sent by the dashboard |
+
+`led_order` lists start-light indices (0 = A on GPIO5, 1 = B on GPIO6, 2 = C on GPIO13) in the order they come on. You can also control the timer without the dashboard, e.g. `mosquitto_pub -h localhost -t race/command -m '{"cmd":"start"}'`.
 
 Watch them live with `mosquitto_sub -h localhost -t 'race/#' -v`.
 
@@ -389,7 +420,7 @@ sudo apt install mosquitto        # on the Pi, or on your own PC
 sudo systemctl enable --now mosquitto
 ```
 
-Point `MQTT_HOST` in `config.hpp` at that broker's address (`localhost` if the timer and broker run on the same machine, otherwise the broker's LAN IP), rebuild, and leave `MQTT_TOKEN` empty if your Mosquitto has no auth configured. Using Ubidots' cloud broker instead works too — the dashboard only cares about the `race/state`/`race/finish` topics either way.
+Point `MQTT_HOST` in `config.hpp` at that broker's address (`localhost` if the timer and broker run on the same machine, otherwise the broker's LAN IP), rebuild, and leave `MQTT_TOKEN` empty if your Mosquitto has no auth configured. Using Ubidots' cloud broker instead works too — the dashboard uses the same `race/...` topics either way.
 
 **2. Run the dashboard** (on your computer, the Pi, or any machine on the same network as the broker):
 
@@ -401,7 +432,16 @@ MQTT_HOST=<broker address> npm start
 
 **3. Open `http://localhost:3000`** (or `http://<that machine's IP>:3000` from another device on the network, e.g. a phone or a screen at the finish line).
 
-The page shows READY / RACE IN PROGRESS, a live clock synced to the race's `started_at`, and a leaderboard that fills in — with position, racer name, and split time — as each `race/finish` message arrives. A late-opened browser still gets the current state and standings (the server replays them on connect).
+The page shows:
+
+- **Status card** — READY / STARTING / RACE IN PROGRESS, with the three start lights mirrored live and a race clock synced to the race's `started_at`.
+- **START / RESET buttons** — same as the physical buttons. START only works while the timer is ready (red); RESET works any time, including during the start lights. If the race timer isn't running, both are greyed out and a warning shows.
+- **Laps** — how many laps the race is (1–99), with −/+ or by typing. Only changeable while the timer is ready; saved on the Pi.
+- **Status card** lap counter — `LAP 2 / 5` for the leader; CHEQUERED FLAG with the winner's name and time once they finish.
+- **Leaderboard** — live standings: position, racer, laps done, last lap time and total time. Classified racers (🏁) come first in finishing order, then everyone else by most laps. A late-opened browser still gets the current state and standings (the server replays them on connect).
+- **Start lights order** — the order the three lights come on in. Use ▲/▼ to move a light earlier or later, **Test** to flash that physical light for 1 s (to find out which LED is which), then **Save order**. Only editable while the timer is ready. The order is saved on the Pi (`race_settings.txt`) and kept across restarts.
+
+Anyone who can open the page on your network can start and reset races — keep it on a private network.
 
 ---
 
@@ -410,11 +450,15 @@ The page shows READY / RACE IN PROGRESS, a live clock synced to the race's `star
 | Symptom | Cause / fix |
 | ------- | ----------- |
 | `initInitialise: Can't lock /var/run/pigpio.pid` | Another program already holds the GPIO — a second `race_timer`, the `race-timer` service, or the `pigpiod` daemon. Run `sudo systemctl stop race-timer; sudo pkill race_timer; sudo systemctl disable --now pigpiod` and start again. |
-| `warning: no RFID reader on /dev/ttyUSB0` | The USB-TTL adapter isn't plugged in, or got another name — check `ls /dev/ttyUSB* /dev/ttyACM*` and update `RFID_PORT`. Races still start/reset, but no finishes are recorded. |
+| `open /dev/spidev0.0: No such file or directory` | SPI is disabled — `sudo raspi-config nonint do_spi 0` (reboot if it still doesn't appear). |
+| `RC522 not detected ... (version reg = 0x00)` or `0xFF` | Wiring: check SDA→24, SCK→23, MOSI→19, MISO→21, RST→22, 3.3V and GND. Loose jumper wires are the usual cause. |
+| Dashboard buttons greyed out, "Race timer is offline" | `race_timer` isn't running or isn't connected to the same broker. Start it, and check `MQTT_HOST` matches on both sides. |
+| `RC522 reader ready` but tags never register | Hold the tag flat against the reader for a second; only 13.56 MHz (MIFARE) tags work, 125 kHz ones don't. A race must be running (green). |
 | Dashboard never changes | Timer and dashboard aren't on the same broker. Check `MQTT_HOST` in `config.hpp` (then rebuild) and the `MQTT_HOST` given to `npm start`; `mosquitto_sub -h localhost -t 'race/#' -v` shows whether events arrive. |
 | Button does nothing | While the timer runs, `watch -n 0.2 pigs r 22` (START) / `pigs r 23` (RESET) should go `1` → `0` when pressed. If it stays `1`, check the wiring: pin 15/16 to one leg, GND to the other — on 4-leg buttons use diagonally opposite legs. |
 | Racer shows as `UNKNOWN_TAG:<id>` | Tag not in `racers.csv` (or the timer wasn't restarted after editing it, or it was started from inside `build/`). |
-| Racer finishes only once | By design — repeat reads of the same tag in one race are ignored. Press RESET to start over. |
+| A pass counts twice / a lap is missed | Reads of the same tag closer together than `MIN_LAP_S` (3 s) are one pass. Raise it if racers linger at the reader; lower it if a real lap can be shorter than 3 s. |
+| A racer's passes stop counting | They've been classified (🏁) — after the chequered flag each racer finishes on their next pass. Press RESET for a new race. |
 
 The buttons use pigpio *alert* callbacks rather than `gpioSetISRFunc`: ISRs go through sysfs GPIO, which recent Raspberry Pi kernels number from 512, so they silently fail to register.
 
@@ -452,4 +496,4 @@ mqtt in ──► json ──► function (extract time + racer + place) ──�
 
 - `EEN251 - HTTP e MQTT - Raspberry Pi e Node-RED.pdf` (course material) — MQTT auth model, Ubidots dashboards, Node-RED nodes.
 - [Ubidots hardware API docs](https://ubidots.com/docs/hw/)
-- [RDM6300 datasheet / frame format](https://www.sunrom.com/get/224900)
+- [NXP MFRC522 datasheet](https://www.nxp.com/docs/en/data-sheet/MFRC522.pdf)
