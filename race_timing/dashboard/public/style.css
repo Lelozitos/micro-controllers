@@ -114,12 +114,14 @@ html, body {
   transition: border-color 0.4s, background 0.4s;
 }
 
-.state-card.running {
+/* Matches the physical LEDs: red = ready, green = race running. */
+.state-card.idle,
+.state-card.countdown {
   border-color: rgba(255, 77, 94, 0.4);
   background: var(--danger-soft);
 }
 
-.state-card.idle {
+.state-card.running {
   border-color: rgba(61, 220, 151, 0.3);
   background: var(--accent-soft);
 }
@@ -128,11 +130,11 @@ html, body {
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: 0.25em;
-  color: var(--accent);
+  color: var(--danger);
 }
 
 .state-card.running .state-label {
-  color: var(--danger);
+  color: var(--accent);
   animation: blink 1.4s infinite;
 }
 
@@ -164,7 +166,7 @@ html, body {
 
 .board-head {
   display: grid;
-  grid-template-columns: 64px 1fr 120px;
+  grid-template-columns: 56px 1fr 56px 100px 110px;
   padding: 16px 20px;
   font-size: 0.75rem;
   letter-spacing: 0.15em;
@@ -182,7 +184,7 @@ html, body {
 
 .board-list li.row {
   display: grid;
-  grid-template-columns: 64px 1fr 120px;
+  grid-template-columns: 56px 1fr 56px 100px 110px;
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid var(--panel-border);
@@ -236,4 +238,249 @@ html, body {
   text-align: center;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+/* F1 start lights */
+.f1-lights {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.f1-light {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #2a1418;
+  border: 2px solid #3a2026;
+  transition: background 0.08s, box-shadow 0.08s;
+}
+
+.f1-light.on {
+  background: var(--danger);
+  border-color: #ff8a95;
+  box-shadow: 0 0 18px 4px rgba(255, 77, 94, 0.6);
+}
+
+/* Race controls */
+.controls {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 14px;
+}
+
+.btn {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  border-radius: 14px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, opacity 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-start,
+.btn-reset {
+  padding: 20px;
+  font-size: 1.3rem;
+}
+
+.btn-start {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #08140f;
+}
+
+.btn-start:not(:disabled):hover { filter: brightness(1.1); }
+
+.btn-reset {
+  border-color: rgba(255, 77, 94, 0.5);
+  color: var(--danger);
+}
+
+.btn-reset:not(:disabled):hover { background: var(--danger-soft); }
+
+.btn-small {
+  padding: 8px 14px;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+}
+
+.btn-small:not(:disabled):hover { border-color: rgba(255, 255, 255, 0.25); }
+
+.btn-primary {
+  background: var(--accent-soft);
+  border-color: rgba(61, 220, 151, 0.5);
+  color: var(--accent);
+}
+
+.timer-warning {
+  margin-top: -14px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.timer-warning code { font-family: var(--font-mono); font-size: 0.8rem; }
+
+/* Start lights order panel */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  backdrop-filter: blur(20px);
+}
+
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 16px 20px;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.panel-hint { letter-spacing: 0.04em; }
+
+.order-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.order-row {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.order-step {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--danger);
+}
+
+.order-led { font-weight: 600; }
+
+.order-led small {
+  display: block;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.order-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.order-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+}
+
+@media (max-width: 480px) {
+  .topbar { padding: 18px 16px; }
+  .stage { padding: 12px 16px 48px; }
+  .order-row { grid-template-columns: 32px 1fr; }
+  .order-buttons { grid-column: 1 / -1; justify-content: flex-end; }
+}
+
+/* Laps */
+.lap-counter {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 6px;
+  min-height: 1.2em;
+}
+
+.state-card.finished {
+  border-color: rgba(255, 209, 102, 0.5);
+  background: rgba(255, 209, 102, 0.1);
+}
+
+.state-card.finished .state-label { color: var(--gold); }
+
+.laps-setting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
+}
+
+.laps-title {
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  color: var(--muted);
+  margin-right: 4px;
+}
+
+.laps-input {
+  width: 64px;
+  padding: 8px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+}
+
+.laps-input:disabled { opacity: 0.5; }
+
+.laps-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.num { text-align: right; }
+
+.laps-col,
+.last-lap {
+  font-family: var(--font-mono);
+  text-align: right;
+  color: var(--muted);
+}
+
+.laps-col { color: var(--text); font-weight: 700; }
+
+.row.running-row .pos { background: rgba(255, 255, 255, 0.06); color: var(--muted); }
+
+.row.flag-row .racer::after {
+  content: ' 🏁';
+}
+
+@media (max-width: 480px) {
+  .board-head,
+  .board-list li.row { grid-template-columns: 44px 1fr 44px 90px; }
+  .col-last,
+  .last-lap { display: none; }
 }

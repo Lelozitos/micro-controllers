@@ -23,21 +23,55 @@
   </header>
 
   <main class="stage">
-    <section class="state-card" id="state-card">
+    <section class="state-card idle" id="state-card">
+      <div class="f1-lights" id="f1-lights" aria-label="start lights"></div>
       <div class="state-label" id="state-label">READY</div>
+      <div class="lap-counter" id="lap-counter"></div>
       <div class="clock" id="clock">00:00.00</div>
       <div class="state-sub" id="state-sub">waiting for start signal</div>
     </section>
+
+    <section class="laps-setting">
+      <span class="laps-title">LAPS</span>
+      <button class="btn btn-small" id="btn-laps-minus" aria-label="fewer laps" disabled>−</button>
+      <input class="laps-input" id="laps-input" type="number" min="1" max="99" value="3" disabled />
+      <button class="btn btn-small" id="btn-laps-plus" aria-label="more laps" disabled>+</button>
+      <span class="laps-hint">first to complete them wins</span>
+    </section>
+
+    <section class="controls">
+      <button class="btn btn-start" id="btn-start" disabled>START</button>
+      <button class="btn btn-reset" id="btn-reset" disabled>RESET</button>
+    </section>
+    <div class="timer-warning" id="timer-warning" hidden>
+      Race timer is offline — start <code>sudo ./build/race_timer</code> on the Pi.
+    </div>
 
     <section class="board">
       <div class="board-head">
         <span>POS</span>
         <span>RACER</span>
-        <span>TIME</span>
+        <span class="num">LAPS</span>
+        <span class="num col-last">LAST LAP</span>
+        <span class="num">TIME</span>
       </div>
       <ol class="board-list" id="board-list">
-        <li class="empty-row" id="empty-row">No finishers yet</li>
+        <li class="empty-row" id="empty-row">No laps yet</li>
       </ol>
+    </section>
+
+    <section class="panel lights-panel">
+      <div class="panel-head">
+        <span>START LIGHTS ORDER</span>
+        <span class="panel-hint">first to light at the top · lights out all at once</span>
+      </div>
+      <ol class="order-list" id="order-list">
+        <li class="empty-row">Waiting for the race timer…</li>
+      </ol>
+      <div class="order-actions">
+        <button class="btn btn-small" id="btn-order-revert" disabled>Revert</button>
+        <button class="btn btn-small btn-primary" id="btn-order-save" disabled>Save order</button>
+      </div>
     </section>
   </main>
 
