@@ -265,8 +265,12 @@ int main() {
         std::fprintf(stderr, "pigpio init failed (run as root / check daemon)\n");
         return 1;
     }
+    // Ctrl+C, kill/systemctl stop, closed terminal: exit through the cleanup
+    // that turns the LEDs off.
     gpioSetSignalFunc(SIGINT, onSignal);
     gpioSetSignalFunc(SIGTERM, onSignal);
+    gpioSetSignalFunc(SIGHUP, onSignal);
+    gpioSetSignalFunc(SIGQUIT, onSignal);
 
     loadSettings();
 

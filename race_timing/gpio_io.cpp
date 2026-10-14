@@ -19,9 +19,12 @@ bool init() {
     gpioWrite(config::READY_LED_PIN, 1);  // idle = red on, ready to start
     gpioWrite(config::RUNNING_LED_PIN, 0);
 
-    // RC522 RST is active low: hold it high so the reader runs.
-    gpioSetMode(config::RFID_RST_PIN, PI_OUTPUT);
-    gpioWrite(config::RFID_RST_PIN, 1);
+    // RC522 RST is active low: hold it high so the reader runs (unless it's
+    // simply wired to 3.3V).
+    if (config::RFID_RST_PIN >= 0) {
+        gpioSetMode(config::RFID_RST_PIN, PI_OUTPUT);
+        gpioWrite(config::RFID_RST_PIN, 1);
+    }
 
     gpioSetMode(config::START_BUTTON_PIN, PI_INPUT);
     gpioSetPullUpDown(config::START_BUTTON_PIN, PI_PUD_UP);
@@ -31,10 +34,13 @@ bool init() {
     return true;
 }
 
+// Everything off: all LEDs dark and the RC522 held in reset (RST low), so
+// nothing stays lit once the timer stops.
 void shutdown() {
     gpioWrite(config::READY_LED_PIN, 0);
     gpioWrite(config::RUNNING_LED_PIN, 0);
     allCountdownOff();
+    if (config::RFID_RST_PIN >= 0) gpioWrite(config::RFID_RST_PIN, 0);
     gpioTerminate();
 }
 
