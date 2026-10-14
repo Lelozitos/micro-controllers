@@ -109,7 +109,19 @@ void publishConfig() {
 // RFID reader thread: each read of a tag at the line is a lap (RaceManager
 // drops the repeats while the tag is held there).
 void onTag(const std::string& tag) {
-    if (g_phase != Phase::Running && g_phase != Phase::Finished) return;
+    if (g_phase != Phase::Running && g_phase != Phase::Finished) {
+        // Outside a race: just show which tag is on the reader, so new tags
+        // can be registered in racers.csv. Once per tag presentation.
+        static std::string last_tag;
+        static auto last_seen = std::chrono::steady_clock::time_point{};
+        auto now = std::chrono::steady_clock::now();
+        if (tag != last_tag || now - last_seen > std::chrono::seconds(2)) {
+            std::printf("Tag on reader: %s  (%s)\n", tag.c_str(), g_race->nameForTag(tag).c_str());
+        }
+        last_tag = tag;
+        last_seen = now;
+        return;
+    }
     Crossing c = g_race->recordCrossing(tag);
     if (!c.counted) return;
 
