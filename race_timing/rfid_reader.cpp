@@ -35,7 +35,8 @@ int openSerial(const std::string& port) {
 
 }  // namespace
 
-RfidReader::RfidReader(std::string port) : port_(std::move(port)) {
+RfidReader::RfidReader(std::string port, TagCallback on_tag)
+    : port_(std::move(port)), on_tag_(std::move(on_tag)) {
     fd_ = openSerial(port_);
     thread_ = std::thread(&RfidReader::run, this);
 }
@@ -66,22 +67,11 @@ void RfidReader::run() {
         if (byte == 0x03) {  // ETX
             if (in_frame && frame.size() >= 10) {
                 std::string tag(frame.begin(), frame.begin() + 10);
-                std::lock_guard<std::mutex> lock(mutex_);
-                last_tag_ = tag;
-                last_seen_ = std::chrono::steady_clock::now();
+                if (on_tag_) on_tag_(tag);
             }
             in_frame = false;
             continue;
         }
         if (in_frame) frame.push_back(byte);
     }
-}
-
-std::string RfidReader::lastTagWithin(double window_seconds) const {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (last_tag_.empty()) return "";
-    auto age = std::chrono::duration<double>(
-                   std::chrono::steady_clock::now() - last_seen_)
-                   .count();
-    return age <= window_seconds ? last_tag_ : "";
 }

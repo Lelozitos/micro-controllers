@@ -33,20 +33,25 @@ std::string RaceManager::nameForTag(const std::string& tag_id) const {
 }
 
 void RaceManager::startRace() {
-    running_ = true;
+    std::lock_guard<std::mutex> lock(mutex_);
     start_time_ = std::chrono::steady_clock::now();
     crossings_.clear();
+    finished_tags_.clear();
+    running_ = true;
 }
 
 void RaceManager::stopRace() { running_ = false; }
 
 void RaceManager::reset() {
+    std::lock_guard<std::mutex> lock(mutex_);
     running_ = false;
     crossings_.clear();
+    finished_tags_.clear();
 }
 
 Crossing RaceManager::recordCrossing(const std::string& tag_id) {
-    if (!running_) return {0, "", "", 0.0};
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!running_ || !finished_tags_.insert(tag_id).second) return {0, "", "", 0.0};
 
     double elapsed = std::chrono::duration<double>(
                           std::chrono::steady_clock::now() - start_time_)
@@ -59,6 +64,7 @@ Crossing RaceManager::recordCrossing(const std::string& tag_id) {
 }
 
 void RaceManager::saveLog() const {
+    std::lock_guard<std::mutex> lock(mutex_);
     bool exists = std::ifstream(log_file_).good();
     std::ofstream out(log_file_, std::ios::app);
     if (!exists) out << "place,tag_id,racer_name,elapsed_s\n";
