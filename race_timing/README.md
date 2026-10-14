@@ -67,7 +67,7 @@ The RC522 connects straight to the Pi's pins over SPI — no adapter. It runs on
 | MISO       | 21              | GPIO9 (MISO)    |
 | IRQ        | — not connected | —               |
 | GND        | 20 (any GND)    | —               |
-| RST        | 22              | GPIO25          |
+| RST        | 17 or 1 (3.3 V) | — (keeps the reader on) |
 | 3.3V       | 17 (or 1)       | 3.3 V           |
 
 SPI must be enabled once (it's off by default):
@@ -93,10 +93,12 @@ Internal pull-ups are enabled in software — wire the other leg straight to GND
 | Pi 4 pin (BCM) | Physical pin | Part                                   |
 | --------------- | ------------ | ---------------------------------------- |
 | GPIO24          | 18           | Red LED — ready, race can start          |
-| GPIO26          | 37           | Green LED — race in progress             |
+| GPIO25          | 22           | Green LED — race in progress             |
 | GPIO5           | 29           | Start light A (red)                      |
 | GPIO6           | 31           | Start light B (red)                      |
 | GPIO13          | 33           | Start light C (red)                      |
+
+**Finding the pins:** the header is easy to miscount — count from the end *away* from the SD card. The inner row (odd numbers) ends with pin 39 (GND), and going back: 37, 35, **33 (light C)**, **31 (light B)**, **29 (light A)** — so the start lights are the 3rd, 4th and 5th inner-row pins from the end. Not sure? Stop the timer and run `./led_test.sh`: it lights GPIO24, 25, 5, 6 and 13 one at a time for 3 s each and prints which one is on (`./led_test.sh 17 27` tests any GPIO numbers you give).
 
 Each LED: GPIO pin → 330 Ω resistor → LED long leg (anode); LED short leg (cathode) → GND.
 
@@ -104,8 +106,8 @@ Each LED: GPIO pin → 330 Ω resistor → LED long leg (anode); LED short leg (
 | -------------------- | ------------------------------------------------ |
 | Red (GPIO24)         | Ready — press START to begin a race              |
 | Start lights on 1 → 2 → 3 | Starting — one more light each second (order set from the dashboard) |
-| All lit, then all off at once | Lights out = GO — race clock starts. The hold with all lit is random (2–6 s), like F1, so nobody can anticipate it |
-| Green (GPIO26)       | Race in progress — laps are being recorded; blinks off briefly each time a lap is counted. Stays on after the chequered flag until RESET |
+| All lit, then all off at once | Lights out = GO — race clock starts. The hold with all lit is random (1–3 s), like F1, so nobody can anticipate it |
+| Green (GPIO25)       | Race in progress — laps are being recorded; blinks off briefly each time a lap is counted. Stays on after the chequered flag until RESET |
 
 All pins and timings are set in `config.hpp` (`READY_LED_PIN`, `RUNNING_LED_PIN`, `COUNTDOWN_LED_PINS`, `COUNTDOWN_STEP_MS`, `COUNTDOWN_HOLD_MIN_MS`/`MAX_MS`) — change them there and rebuild if you wire differently. The order the start lights come on in is changed from the dashboard (see [Local Web Dashboard](#local-web-dashboard)), not in the code; it's saved in `race_settings.txt` together with the number of laps.
 
@@ -122,6 +124,7 @@ race_timing/
 ├── rfid_reader.hpp/.cpp   — RC522 driver over SPI (spidev), polls for cards in a background thread
 ├── race_manager.hpp/.cpp  — race state machine, racer lookup, CSV log
 ├── mqtt_publisher.hpp/.cpp — MQTT link: race events out, dashboard commands in (libmosquitto)
+├── led_test.sh            — lights each LED pin in turn, to check the wiring
 ├── racers.csv             — "tag_id,name" roster, one line per racer
 ├── race_log.csv           — created automatically, one row per lap (saved on RESET)
 ├── race_settings.txt      — created automatically: laps + start light order set from the dashboard
@@ -162,6 +165,9 @@ sudo apt update && sudo apt upgrade -y
 sudo apt install -y git cmake g++ libpigpio-dev libmosquitto-dev mosquitto mosquitto-clients nodejs npm
 sudo systemctl enable --now mosquitto
 sudo systemctl disable --now pigpiod   # race_timer uses pigpio directly; the daemon would block it
+
+# LEDs off from power-on until the timer starts (GPIO5/6 default to pull-up and would glow)
+echo 'gpio=5,6,13,24,25=op,dl' | sudo tee -a /boot/firmware/config.txt
 ```
 
 **2. Get the code**
@@ -241,7 +247,7 @@ To find a tag's ID: start the timer, start a race (wait for green, then a few se
 2. Start lights come on one by one, one per second, in the saved order
         │   (RESET during the lights aborts back to ready)
         ▼
-3. All lit for a random 2–6 s, then all go out at once
+3. All lit for a random 1–3 s, then all go out at once
         │
         ▼
    Lights out = GO: race state → running, green LED on
@@ -274,7 +280,7 @@ To find a tag's ID: start the timer, start a race (wait for green, then a few se
 Once the code builds, work through these in order on the real hardware:
 
 1. **Stop anything holding the GPIO**: `sudo pkill race_timer; sudo systemctl disable --now pigpiod`.
-2. **Wire the LEDs** per [Status LEDs & countdown lights](#status-leds--countdown-lights) and start the timer (`sudo ./build/race_timer` from the project folder) — the red ready LED should light.
+2. **Wire the LEDs** per [Status LEDs & countdown lights](#status-leds--countdown-lights) and check them with `./led_test.sh` (timer stopped): red, green, then start lights A, B, C should each light for 3 s, in that order. Then start the timer (`sudo ./build/race_timer` from the project folder) — the red ready LED should light.
 3. **Test the buttons**: START → countdown 1, 2, 3 → all off → green. RESET → red again. If nothing happens, see [Troubleshooting](#troubleshooting).
 4. **Wire the RC522 and enable SPI** per [RFID reader (RC522)](#rfid-reader-rc522). Restart the timer — it must print `RC522 reader ready`, not a warning.
 5. **Register the tags** in `racers.csv` (see [Registering racers](#registering-racers)) and restart the timer.
@@ -451,8 +457,10 @@ Anyone who can open the page on your network can start and reset races — keep 
 | ------- | ----------- |
 | `initInitialise: Can't lock /var/run/pigpio.pid` | Another program already holds the GPIO — a second `race_timer`, the `race-timer` service, or the `pigpiod` daemon. Run `sudo systemctl stop race-timer; sudo pkill race_timer; sudo systemctl disable --now pigpiod` and start again. |
 | `open /dev/spidev0.0: No such file or directory` | SPI is disabled — `sudo raspi-config nonint do_spi 0` (reboot if it still doesn't appear). |
-| `RC522 not detected ... (version reg = 0x00)` or `0xFF` | Wiring: check SDA→24, SCK→23, MOSI→19, MISO→21, RST→22, 3.3V and GND. Loose jumper wires are the usual cause. |
+| `RC522 not detected ... (version reg = 0x00)` or `0xFF` | Wiring: check SDA→24, SCK→23, MOSI→19, MISO→21, RST→3.3V (pin 1 or 17), 3.3V→17 and GND. Loose jumper wires are the usual cause. |
 | Dashboard buttons greyed out, "Race timer is offline" | `race_timer` isn't running or isn't connected to the same broker. Start it, and check `MQTT_HOST` matches on both sides. |
+| LEDs stay on with nothing running | The timer turns every LED off when it stops (Ctrl+C, closed terminal, `kill`, `systemctl stop`) — but not after `kill -9` or a power cut. Faint glow on start lights A/B after a reboot: add `gpio=5,6,13,24,25=op,dl` to `/boot/firmware/config.txt` (see setup step 1). |
+| An LED never lights | Stop the timer and run `./led_test.sh`. If an LED stays dark on its pin, move its wire to pin 22 and run `./led_test.sh 25`: if it lights there, the wire was on the wrong header pin (count again from the end, see [Finding the pins](#status-leds--countdown-lights)); if not, check the LED's direction, resistor and GND. |
 | `RC522 reader ready` but tags never register | Hold the tag flat against the reader for a second; only 13.56 MHz (MIFARE) tags work, 125 kHz ones don't. A race must be running (green). |
 | Dashboard never changes | Timer and dashboard aren't on the same broker. Check `MQTT_HOST` in `config.hpp` (then rebuild) and the `MQTT_HOST` given to `npm start`; `mosquitto_sub -h localhost -t 'race/#' -v` shows whether events arrive. |
 | Button does nothing | While the timer runs, `watch -n 0.2 pigs r 22` (START) / `pigs r 23` (RESET) should go `1` → `0` when pressed. If it stays `1`, check the wiring: pin 15/16 to one leg, GND to the other — on 4-leg buttons use diagonally opposite legs. |
