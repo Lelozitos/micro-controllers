@@ -11,7 +11,6 @@ bool init() {
 
     gpioSetMode(config::READY_LED_PIN, PI_OUTPUT);
     gpioSetMode(config::RUNNING_LED_PIN, PI_OUTPUT);
-    gpioSetMode(config::BUZZER_PIN, PI_OUTPUT);
     for (int pin : config::COUNTDOWN_LED_PINS) {
         gpioSetMode(pin, PI_OUTPUT);
         gpioWrite(pin, 0);
@@ -19,7 +18,10 @@ bool init() {
 
     gpioWrite(config::READY_LED_PIN, 1);  // idle = red on, ready to start
     gpioWrite(config::RUNNING_LED_PIN, 0);
-    gpioWrite(config::BUZZER_PIN, 0);
+
+    // RC522 RST is active low: hold it high so the reader runs.
+    gpioSetMode(config::RFID_RST_PIN, PI_OUTPUT);
+    gpioWrite(config::RFID_RST_PIN, 1);
 
     gpioSetMode(config::START_BUTTON_PIN, PI_INPUT);
     gpioSetPullUpDown(config::START_BUTTON_PIN, PI_PUD_UP);
@@ -32,7 +34,7 @@ bool init() {
 void shutdown() {
     gpioWrite(config::READY_LED_PIN, 0);
     gpioWrite(config::RUNNING_LED_PIN, 0);
-    setCountdownLights(0);
+    allCountdownOff();
     gpioTerminate();
 }
 
@@ -43,15 +45,18 @@ void setRunningIndicator(bool running) {
 
 void setReadyIndicator(bool ready) { gpioWrite(config::READY_LED_PIN, ready ? 1 : 0); }
 
-void setCountdownLights(int lit) {
-    int i = 0;
-    for (int pin : config::COUNTDOWN_LED_PINS) gpioWrite(pin, i++ < lit ? 1 : 0);
+void setCountdownLed(int index, bool on) {
+    gpioWrite(config::COUNTDOWN_LED_PINS[index], on ? 1 : 0);
 }
 
-void beep(int duration_ms) {
-    gpioWrite(config::BUZZER_PIN, 1);
-    gpioDelay(duration_ms * 1000);
-    gpioWrite(config::BUZZER_PIN, 0);
+void allCountdownOff() {
+    for (int pin : config::COUNTDOWN_LED_PINS) gpioWrite(pin, 0);
+}
+
+void blinkRunning() {
+    gpioWrite(config::RUNNING_LED_PIN, 0);
+    gpioDelay(150000);
+    gpioWrite(config::RUNNING_LED_PIN, 1);
 }
 
 }  // namespace gpio_io

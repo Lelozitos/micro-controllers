@@ -8,23 +8,37 @@
 
 namespace config {
 
-const std::string RFID_PORT = "/dev/ttyUSB0";    // RDM6300 reader at the finish line
+// RC522 (MFRC522, 13.56 MHz) reader at the finish line, on SPI0 CE0.
+const std::string RFID_SPI_DEVICE = "/dev/spidev0.0";
+constexpr int RFID_RST_PIN = 25;               // RC522 RST, physical pin 22
+constexpr int RFID_POLL_MS = 50;               // how often to look for a card
 
 constexpr int START_BUTTON_PIN = 22;
 constexpr int RESET_BUTTON_PIN = 23;
 constexpr int READY_LED_PIN = 24;    // red   = idle, race can start (physical pin 18)
-constexpr int RUNNING_LED_PIN = 25;  // green = race in progress     (physical pin 22)
-constexpr int BUZZER_PIN = 18;
+constexpr int RUNNING_LED_PIN = 26;  // green = race in progress     (physical pin 37)
 
-// Start countdown lights: lit one by one, then all go out = GO.
+// F1-style start lights: they come on one by one, stay lit for a random
+// hold, then all go out at once = GO. The order they light in can be changed
+// from the dashboard and is saved in SETTINGS_FILE.
 constexpr int COUNTDOWN_LED_PINS[] = {5, 6, 13};  // physical pins 29, 31, 33
-constexpr int COUNTDOWN_STEP_MS = 1000;
+constexpr int COUNTDOWN_LED_COUNT = sizeof(COUNTDOWN_LED_PINS) / sizeof(COUNTDOWN_LED_PINS[0]);
+constexpr int COUNTDOWN_STEP_MS = 1000;      // gap between lights coming on
+constexpr int COUNTDOWN_HOLD_MIN_MS = 2000;  // after the last light comes on, all stay lit
+constexpr int COUNTDOWN_HOLD_MAX_MS = 6000;  // for a random 2-6 s, then lights out
+
+// Lap race: every read of a racer's tag at the line is a lap. The first to
+// complete the set number of laps (chosen on the dashboard) wins.
+constexpr int DEFAULT_LAPS = 3;
+constexpr int MAX_LAPS = 99;
+constexpr double MIN_LAP_S = 3.0;  // same tag again sooner than this = still the same pass
 
 const std::string RACERS_FILE = "racers.csv";  // "tag_id,name" per line
 const std::string LOG_FILE = "race_log.csv";
+const std::string SETTINGS_FILE = "race_settings.txt";  // laps + light order set from the dashboard
 
-// MQTT / Ubidots - same auth model as the EEN251 course slides:
-// token as username, blank password.
+// MQTT broker shared with the dashboard (it also sends START/RESET/LED
+// commands on race/command). For Ubidots: token as username, blank password.
 const std::string MQTT_HOST = "localhost";
 constexpr int MQTT_PORT = 1883;
 const std::string MQTT_TOKEN = "";
