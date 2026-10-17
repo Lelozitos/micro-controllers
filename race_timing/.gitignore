@@ -1,4 +1,5 @@
 build/
 dashboard/node_modules/
-race_log.csv
+race_log.csv*
 race_settings.txt
+dashboard/results/
