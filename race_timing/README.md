@@ -2,7 +2,7 @@
 
 Raspberry Pi 4 + C++ — Finish-line timer for a single track that identifies **who** finished. An RFID reader is the finish line (no break-beam sensor), three red lights give the start countdown, red/green LEDs show whether a race can start or is running, and results go over MQTT to a live web dashboard (local Mosquitto by default, Ubidots optional).
 
-Racers cross the finish line one at a time (running race, single lane); the system records finish order and split time per racer, not per lane.
+Racers cross the finish line one at a time (running race, single lane); the system records laps per racer, not per lane. Extra RC522 readers placed around the track act as **sector lines**, so each lap is also split into sector times (S1, S2, …).
 
 ---
 
@@ -29,7 +29,7 @@ Racers cross the finish line one at a time (running race, single lane); the syst
 
 ## Why RFID: knowing *who* crossed
 
-Each racer carries a 13.56 MHz card or keyfob. The Pi asks the RC522 at the line for a card every 50 ms; when a racer holds their tag to the reader, its ID (UID) is read and looked up in `racers.csv`. **Every pass of the line is a lap.**
+Each racer carries a 13.56 MHz card or keyfob. The Pi asks the RC522 at the line for a card every 50 ms; when a racer holds their tag to the reader, its ID (UID) is read and looked up in `racers.csv`. **A racer's first pass of the finish line starts their lap 1** (rolling start); every pass after that completes a lap, so every lap time is measured line to line.
 
 ```
 racer reaches the reader ──► tag read (~3 cm range)
@@ -37,6 +37,10 @@ racer reaches the reader ──► tag read (~3 cm range)
                                    ▼
      same tag read < 3 s ago? ──yes──► ignored (still the same pass — the
                                    │              reader repeats every 50 ms)
+                                   no
+                                   ▼
+         first pass? ──yes──► lap 1 starts (no lap counted)
+                                   │
                                    no
                                    ▼
                      lap counted (lap time + total time)
@@ -47,7 +51,7 @@ racer reaches the reader ──► tag read (~3 cm range)
                                                   their next pass)
 ```
 
-The 3 s gap is `MIN_LAP_S` in `config.hpp`; it also stops a tag held at the line when the lights go out from counting as a lap.
+The 3 s gap is `MIN_LAP_S` in `config.hpp`. Sector lines are ignored until a racer has made their first pass of the finish line. Race times (and so finishing order) are counted from lights out.
 
 Tags not listed in `racers.csv` are still logged, as `UNKNOWN_TAG:<id>` — handy for finding out a new tag's ID (see [Registering racers](#registering-racers)).
 
@@ -79,6 +83,20 @@ ls /dev/spidev0.0                     # must exist
 
 Mount the reader right at the finish line; racers must hold their tag within ~3 cm of it.
 
+### More readers: sector lines
+
+Every extra RC522 is a sector line. All readers share SCK, MOSI, MISO, 3.3V and GND (wire them in parallel); each one gets **its own SDA (chip-select) pin**:
+
+| Reader SDA to | Pi physical pin | SPI device | Needs |
+| ------------- | --------------- | ---------- | ----- |
+| GPIO8 (CE0)   | 24 | `/dev/spidev0.0` | SPI enabled (default finish line) |
+| GPIO7 (CE1)   | 26 | `/dev/spidev0.1` | SPI enabled |
+| GPIO18 (SPI1 CE0) | 12 | `/dev/spidev1.0` | `dtoverlay=spi1-3cs` in `/boot/firmware/config.txt`, reboot. SPI1 uses its own SCK/MOSI/MISO: GPIO21/20/19 = pins 40/38/35 |
+| GPIO17 (SPI1 CE1) | 11 | `/dev/spidev1.1` | same |
+| GPIO16 (SPI1 CE2) | 36 | `/dev/spidev1.2` | same |
+
+Then open the dashboard's **Developer** tab, add a sector line per reader in track order, pick each one's SPI device and **Save** (only while the timer is ready). Every line shows *Reader OK* or *Not found*. With N lines a lap has N sectors: S1 = finish → line 1, S2 = line 1 → line 2, …, SN = last line → finish. If a racer misses a line, the sectors on either side of it are left untimed (—); the lap still counts.
+
 ### Start / Reset buttons
 
 | Pi 4 pin (BCM) | Physical pin | Button        |
@@ -107,7 +125,7 @@ Each LED: GPIO pin → 330 Ω resistor → LED long leg (anode); LED short leg (
 | Red (GPIO24)         | Ready — press START to begin a race              |
 | Start lights on 1 → 2 → 3 | Starting — one more light each second (order set from the dashboard) |
 | All lit, then all off at once | Lights out = GO — race clock starts. The hold with all lit is random (1–3 s), like F1, so nobody can anticipate it |
-| Green (GPIO25)       | Race in progress — laps are being recorded; blinks off briefly each time a lap is counted. Stays on after the chequered flag until RESET |
+| Green (GPIO25)       | Race in progress — laps are being recorded; blinks off briefly each time a lap is counted. Stays on after the chequered flag until every racer who started is classified (or RESET), then goes off and red comes back on |
 
 All pins and timings are set in `config.hpp` (`READY_LED_PIN`, `RUNNING_LED_PIN`, `COUNTDOWN_LED_PINS`, `COUNTDOWN_STEP_MS`, `COUNTDOWN_HOLD_MIN_MS`/`MAX_MS`) — change them there and rebuild if you wire differently. The order the start lights come on in is changed from the dashboard (see [Local Web Dashboard](#local-web-dashboard)), not in the code; it's saved in `race_settings.txt` together with the number of laps.
 
@@ -121,16 +139,18 @@ race_timing/
 ├── config.hpp            — pin map, countdown timing, RFID port, MQTT settings
 ├── main.cpp               — buttons + dashboard commands, F1 start lights, race loop
 ├── gpio_io.hpp/.cpp       — ready/running LEDs, countdown lights, RC522 reset pin via pigpio
-├── rfid_reader.hpp/.cpp   — RC522 driver over SPI (spidev), polls for cards in a background thread
-├── race_manager.hpp/.cpp  — race state machine, racer lookup, CSV log
+├── rfid_reader.hpp/.cpp   — RC522 driver over SPI (spidev), one polling thread per reader
+├── race_manager.hpp/.cpp  — laps + sectors per racer, classification, racer lookup, CSV log
 ├── mqtt_publisher.hpp/.cpp — MQTT link: race events out, dashboard commands in (libmosquitto)
+├── start.sh               — starts dashboard + timer together; Ctrl+C stops both
 ├── led_test.sh            — lights each LED pin in turn, to check the wiring
 ├── racers.csv             — "tag_id,name" roster, one line per racer
-├── race_log.csv           — created automatically, one row per lap (saved on RESET)
-├── race_settings.txt      — created automatically: laps + start light order set from the dashboard
+├── race_log.csv           — created automatically, one row per line crossing (saved on RESET)
+├── race_settings.txt      — created automatically: laps, start light order, timing lines (set from the dashboard)
 └── dashboard/             — local web dashboard (Node.js), see below
     ├── package.json
-    ├── server.js          — MQTT ⇄ Socket.IO bridge, forwards START/RESET/light-order commands
+    ├── server.js          — MQTT ⇄ Socket.IO bridge, keeps each race's laps/sectors, forwards commands
+    ├── results/           — created automatically: one JSON file per race, for the Results tab
     └── public/            — the dashboard page (HTML/CSS/JS)
 ```
 
@@ -194,6 +214,8 @@ cmake ..
 make
 ```
 
+**Quick start — both at once:** `./start.sh` from the project folder starts the dashboard and the timer together in one terminal (asking for the sudo password if needed), stopping any copies already running, and building / installing packages on first run. Dashboard lines are prefixed `[dashboard]`. **Ctrl+C stops both.** Steps 5–6 below are the same thing done by hand.
+
 **5. Run the timer** (from the project folder, not `build/`)
 
 ```bash
@@ -225,14 +247,16 @@ Press START (physical button) — the 3 countdown lights come on one by one, the
 
 ## Registering racers
 
-`racers.csv` has one `tag_id,name` line per racer:
+Easiest: on the dashboard's **Setup** tab, press **Add driver**, then **Scan**, hold the racer's tag flat on any reader (no race needed), type their name and **Save**. Tags held to a reader that aren't registered yet also appear under *Unregistered tags seen* for one-click adding.
+
+The list is stored in `racers.csv`, one `tag_id,name` line per racer, which you can also edit by hand (then press **Reload file** in Setup, or restart the timer):
 
 ```
 A1B2C3D4,Alice
 E5F60718,Bob
 ```
 
-To find a tag's ID: start the timer (no race needed) and hold the tag flat on the reader. The console prints `Tag on reader: A1B2C3D4  (UNKNOWN_TAG:A1B2C3D4)` — copy that 8-character ID into `racers.csv` with the racer's name, save, and restart the timer (the file is read at start-up). Hold the tag again: it now shows `Tag on reader: A1B2C3D4  (Alice)`.
+Without the dashboard: hold the tag to the reader with the timer running; the console prints `Tag on finish reader: A1B2C3D4  (UNKNOWN_TAG:A1B2C3D4)`.
 
 ---
 
@@ -253,7 +277,8 @@ To find a tag's ID: start the timer (no race needed) and hold the tag flat on th
    Lights out = GO: race state → running, green LED on
         │
         ▼
-4. A racer passes the reader → lap counted (ignored if same tag < 3 s ago)
+4. A racer's first pass of the finish line → their lap 1 starts.
+   Every pass after that → lap counted (ignored if same tag < 3 s ago)
         │
         ├── tag resolved to a racer name via racers.csv
         ├── lap number, lap time and total time recorded
@@ -267,7 +292,8 @@ To find a tag's ID: start the timer (no race needed) and hold the tag flat on th
    with however many laps they had — like F1
         │
         ▼
-7. RESET pressed — physical button or dashboard
+7. Last racer on track classified → race over, automatically
+   (or RESET pressed — physical button or dashboard — at any time)
         │
         ├── every lap appended to race_log.csv
         └── red "ready" LED on, green off, state → idle
@@ -388,12 +414,15 @@ By default (`config.hpp`) the timer publishes to the local Mosquitto broker on t
 
 | Topic          | Direction | Payload                                                    | When                    |
 | -------------- | --------- | ----------------------------------------------------------- | ----------------------- |
-| `race/state`   | timer → | `{"state":"countdown","lit":N}`, `{"state":"running","started_at":<epoch_ms>,"laps":N}`, `{"state":"finished","winner":"Alice","elapsed_s":160.4,"laps":N}` or `{"state":"idle"}` | each start light / lights out / chequered flag / RESET / timer start-up |
-| `race/lap`     | timer → | `{"tag":"A1B2C3D4","racer":"Alice","lap":2,"lap_time_s":31.2,"elapsed_s":63.0}` | every counted lap |
+| `race/state`   | timer → | `{"state":"countdown","lit":N}`, `{"state":"running","started_at":<epoch_ms>,"laps":N,"sectors":S}`, `{"state":"finished","winner":"Alice","elapsed_s":160.4,"laps":N}` or `{"state":"idle"}` | state changes |
+| `race/start`   | timer → | `{"tag":"A1B2C3D4","racer":"Alice","elapsed_s":4.2}` | racer's first finish-line pass: their lap 1 starts |
+| `race/sector`  | timer → | `{"tag":"A1B2C3D4","racer":"Alice","lap":3,"sector":1,"sector_time_s":10.1,"elapsed_s":73.1}` (`null` time = previous line missed) | racer crosses a sector line |
+| `race/lap`     | timer → | `{"tag":"A1B2C3D4","racer":"Alice","lap":2,"lap_time_s":31.2,"elapsed_s":63.0,"sectors":[10.1,11.0,10.1]}` | every counted lap |
 | `race/finish`  | timer → | `{"place":1,"tag":"A1B2C3D4","racer":"Alice","laps":5,"elapsed_s":160.4}` | a racer is classified (winner, then the others on their next pass) |
-| `race/config`  | timer → (retained) | `{"led_order":[2,0,1],"led_pins":[5,6,13],"laps":5}` | timer start-up / settings changed |
+| `race/tag`     | timer → | `{"checkpoint":0,"tag":"A1B2C3D4","racer":"Alice"}` | any tag shown to any reader (once per presentation) |
+| `race/config`  | timer → (retained) | `{"led_order":[2,0,1],"led_pins":[5,6,13],"laps":5,"checkpoints":[{"device":"/dev/spidev0.0","ok":true}],"spi_devices":[...],"racers":[{"tag":"A1B2C3D4","name":"Alice"}]}` | timer start-up / settings changed |
 | `race/timer`   | timer → (retained) | `online` / `offline` (MQTT last will)                | timer connects / stops or crashes |
-| `race/command` | → timer | `{"cmd":"start"}`, `{"cmd":"reset"}`, `{"cmd":"set_led_order","order":[2,0,1]}`, `{"cmd":"test_led","led":0}`, `{"cmd":"set_laps","laps":5}` | sent by the dashboard |
+| `race/command` | → timer | `{"cmd":"start"}`, `{"cmd":"reset"}`, `{"cmd":"set_laps","laps":5}`, `{"cmd":"set_led_order","order":[2,0,1]}`, `{"cmd":"test_led","led":0}`, `{"cmd":"set_checkpoints","devices":["/dev/spidev0.0","/dev/spidev0.1"]}`, `{"cmd":"sim_tag","checkpoint":1,"tag":"A1B2C3D4"}`, `{"cmd":"reload_racers"}`, `{"cmd":"set_racers","racers":[{"tag":"A1B2C3D4","name":"Alice"}]}` | sent by the dashboard |
 
 `led_order` lists start-light indices (0 = A on GPIO5, 1 = B on GPIO6, 2 = C on GPIO13) in the order they come on. You can also control the timer without the dashboard, e.g. `mosquitto_pub -h localhost -t race/command -m '{"cmd":"start"}'`.
 
@@ -413,7 +442,7 @@ To use it, set `MQTT_HOST = "industrial.api.ubidots.com"` and `MQTT_TOKEN` to yo
 
 ## Local Web Dashboard
 
-A self-hosted, no-cloud-required dashboard: a small Node.js server bridges MQTT to the browser over Socket.IO and serves a live-updating page — race state banner, running stopwatch, and an animated leaderboard as racers finish.
+A self-hosted, no-cloud-required dashboard: a small Node.js server bridges MQTT to the browser over Socket.IO, keeps the full lap and sector record of every race, and serves the timing page.
 
 ```
 race_timer (C++, on the Pi) ──MQTT──► broker ──MQTT──► dashboard/server.js ──Socket.IO──► browser
@@ -438,14 +467,12 @@ MQTT_HOST=<broker address> npm start
 
 **3. Open `http://localhost:3000`** (or `http://<that machine's IP>:3000` from another device on the network, e.g. a phone or a screen at the finish line).
 
-The page shows:
+The page has a race strip at the top (state, start lights, leader's lap, race clock, **Start** / **Reset**, same as the physical buttons) and four tabs. Add `#results`, `#setup` or `#dev` to the URL to open a tab directly, and `?focus=<tag>` to open the Live tab already following a driver.
 
-- **Status card** — READY / STARTING / RACE IN PROGRESS, with the three start lights mirrored live and a race clock synced to the race's `started_at`.
-- **START / RESET buttons** — same as the physical buttons. START only works while the timer is ready (red); RESET works any time, including during the start lights. If the race timer isn't running, both are greyed out and a warning shows.
-- **Laps** — how many laps the race is (1–99), with −/+ or by typing. Only changeable while the timer is ready; saved on the Pi.
-- **Status card** lap counter — `LAP 2 / 5` for the leader; CHEQUERED FLAG with the winner's name and time once they finish.
-- **Leaderboard** — live standings: position, racer, laps done, last lap time and total time. Classified racers (🏁) come first in finishing order, then everyone else by most laps. A late-opened browser still gets the current state and standings (the server replays them on connect).
-- **Start lights order** — the order the three lights come on in. Use ▲/▼ to move a light earlier or later, **Test** to flash that physical light for 1 s (to find out which LED is which), then **Save order**. Only editable while the timer is ready. The order is saved on the Pi (`race_settings.txt`) and kept across restarts.
+- **Live**: timing table with position, driver, laps, gap to the leader, interval to the car ahead, last lap, best lap and the sector times (the current lap's; greyed-out values are from the previous lap). **Purple** = fastest of anyone, **green** = that driver's personal best. Click a driver to follow them in the side panel: running timer for the lap in progress with its sectors, last/best/ideal lap, gap, and every lap with its sectors and the difference to their best.
+- **Results**: the classification of the current race or any saved one: finishing order, laps, race time, gap to the winner, best lap and which lap it was on, average and ideal lap, and the race records (fastest lap with driver and lap, best time per sector, ideal lap). **Print** has two layouts: *Results, repeated to fill the page* (default) prints the results (title with date and time, classification, records and legend; no lap-by-lap) as many times as fit on one A4 page, with dashed lines to cut along, and *Full report, with lap-by-lap* prints one copy plus every driver's lap-by-lap table. The preview on screen follows the chosen layout. Neither prints the browser's date/address header and footer. Every race is saved automatically on the Pi in `dashboard/results/` as times come in, and stays in the list until you **Delete** it; **Download CSV** saves a race as a spreadsheet. The logo at the top of the results is `dashboard/public/logo.svg` (the Formula 1 logo from Wikimedia Commons, a trademark: fine for private use, not for public or commercial material). Replace it with your own logo under the same name, or change `logo.svg` in `app.js` for a PNG; it's shown at a fixed height, any width.
+- **Setup**: number of laps (only while the timer is ready) and the drivers: edit names and tag IDs, add or remove drivers, then **Save**. The timer rewrites `racers.csv` and uses the new names straight away, even mid-race. **Scan** fills in a tag ID from the next tag held to any reader, and tags seen at a reader that aren't registered yet can be added with one click.
+- **Developer**: the timing lines (which reader is the finish line and which are sector lines, see [More readers](#more-readers-sector-lines); only while the timer is ready), start light order and a **Test** button that lights each LED for 1 s, a **Simulate a read** form that feeds the timer a tag read at any line (to try out timing without hardware), and live **Reader activity** showing every tag presented to every reader.
 
 Anyone who can open the page on your network can start and reset races — keep it on a private network.
 
@@ -464,8 +491,11 @@ Anyone who can open the page on your network can start and reset races — keep 
 | `RC522 reader ready` but tags never register | Hold the tag flat against the reader for a second; only 13.56 MHz (MIFARE) tags work, 125 kHz ones don't. A race must be running (green). |
 | Dashboard never changes | Timer and dashboard aren't on the same broker. Check `MQTT_HOST` in `config.hpp` (then rebuild) and the `MQTT_HOST` given to `npm start`; `mosquitto_sub -h localhost -t 'race/#' -v` shows whether events arrive. |
 | Button does nothing | While the timer runs, `watch -n 0.2 pigs r 22` (START) / `pigs r 23` (RESET) should go `1` → `0` when pressed. If it stays `1`, check the wiring: pin 15/16 to one leg, GND to the other — on 4-leg buttons use diagonally opposite legs. |
-| Racer shows as `UNKNOWN_TAG:<id>` | Tag not in `racers.csv` (or the timer wasn't restarted after editing it, or it was started from inside `build/`). |
+| Racer shows as `UNKNOWN_TAG:<id>` | Tag not registered: add it in the Setup tab's Drivers list (or edit `racers.csv` and press **Reload file**). Also happens if the timer was started from inside `build/`. |
+| A timing line shows *Not found* | That reader's SDA isn't on the chip-select its SPI device uses, or SPI1 isn't enabled (see [More readers](#more-readers-sector-lines)). Check *Reader activity* in the Developer tab while holding a tag to it. |
+| Sector times show — | The racer's tag wasn't read at the line before or after that sector. The lap still counts. |
 | A pass counts twice / a lap is missed | Reads of the same tag closer together than `MIN_LAP_S` (3 s) are one pass. Raise it if racers linger at the reader; lower it if a real lap can be shorter than 3 s. |
+| Race never ends after the chequered flag | It ends once every racer who crossed the line at the start has been classified. If someone retired and won't cross again, press RESET. |
 | A racer's passes stop counting | They've been classified (🏁) — after the chequered flag each racer finishes on their next pass. Press RESET for a new race. |
 
 The buttons use pigpio *alert* callbacks rather than `gpioSetISRFunc`: ISRs go through sysfs GPIO, which recent Raspberry Pi kernels number from 512, so they silently fail to register.
