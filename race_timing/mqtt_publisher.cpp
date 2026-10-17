@@ -25,6 +25,16 @@ std::string jsonIntArray(const std::vector<int>& v) {
     return out.str();
 }
 
+// Seconds as a JSON number; negative (= not timed) becomes null.
+std::string jsonTime(double s) {
+    if (s < 0) return "null";
+    std::ostringstream out;
+    out << s;
+    return out.str();
+}
+
+std::string jsonString(const std::string& s) { return "\"" + jsonEscape(s) + "\""; }
+
 // "race/timer" is "online" while the timer runs; the broker publishes
 // "offline" for us (last will) if it dies, so the dashboard can grey out
 // its controls.
@@ -90,12 +100,40 @@ void MqttPublisher::publish(const std::string& topic, const std::string& payload
 }
 
 void MqttPublisher::publishLap(const std::string& tag, const std::string& racer_name, int lap,
-                                double lap_time_s, double elapsed_s) {
+                                double lap_time_s, double elapsed_s,
+                                const std::vector<double>& sectors) {
     std::ostringstream payload;
-    payload << "{\"tag\":\"" << jsonEscape(tag) << "\",\"racer\":\"" << jsonEscape(racer_name)
-            << "\",\"lap\":" << lap << ",\"lap_time_s\":" << lap_time_s
-            << ",\"elapsed_s\":" << elapsed_s << "}";
+    payload << "{\"tag\":" << jsonString(tag) << ",\"racer\":" << jsonString(racer_name)
+            << ",\"lap\":" << lap << ",\"lap_time_s\":" << lap_time_s
+            << ",\"elapsed_s\":" << elapsed_s << ",\"sectors\":[";
+    for (size_t i = 0; i < sectors.size(); ++i) payload << (i ? "," : "") << jsonTime(sectors[i]);
+    payload << "]}";
     publish("race/lap", payload.str());
+}
+
+void MqttPublisher::publishStart(const std::string& tag, const std::string& racer_name,
+                                  double elapsed_s) {
+    std::ostringstream payload;
+    payload << "{\"tag\":" << jsonString(tag) << ",\"racer\":" << jsonString(racer_name)
+            << ",\"elapsed_s\":" << elapsed_s << "}";
+    publish("race/start", payload.str());
+}
+
+void MqttPublisher::publishSector(const std::string& tag, const std::string& racer_name, int lap,
+                                   int sector, double sector_time_s, double elapsed_s) {
+    std::ostringstream payload;
+    payload << "{\"tag\":" << jsonString(tag) << ",\"racer\":" << jsonString(racer_name)
+            << ",\"lap\":" << lap << ",\"sector\":" << sector
+            << ",\"sector_time_s\":" << jsonTime(sector_time_s) << ",\"elapsed_s\":" << elapsed_s
+            << "}";
+    publish("race/sector", payload.str());
+}
+
+void MqttPublisher::publishTag(int checkpoint, const std::string& tag,
+                                const std::string& racer_name) {
+    publish("race/tag", "{\"checkpoint\":" + std::to_string(checkpoint) +
+                            ",\"tag\":" + jsonString(tag) + ",\"racer\":" +
+                            jsonString(racer_name) + "}");
 }
 
 void MqttPublisher::publishFinish(int place, const std::string& tag,
@@ -118,12 +156,13 @@ void MqttPublisher::publishFinish(int place, const std::string& tag,
 
 void MqttPublisher::publishIdle() { publish("race/state", "{\"state\":\"idle\"}"); }
 
-void MqttPublisher::publishRunning(int laps) {
+void MqttPublisher::publishRunning(int laps, int sectors) {
     auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                       std::chrono::system_clock::now().time_since_epoch())
                       .count();
     publish("race/state", "{\"state\":\"running\",\"started_at\":" + std::to_string(now_ms) +
-                              ",\"laps\":" + std::to_string(laps) + "}");
+                              ",\"laps\":" + std::to_string(laps) +
+                              ",\"sectors\":" + std::to_string(sectors) + "}");
 }
 
 void MqttPublisher::publishFinished(const std::string& winner, double elapsed_s, int laps) {
@@ -138,9 +177,29 @@ void MqttPublisher::publishCountdown(int lit) {
 }
 
 void MqttPublisher::publishConfig(const std::vector<int>& led_order,
-                                   const std::vector<int>& led_pins, int laps) {
-    publish("race/config", "{\"led_order\":" + jsonIntArray(led_order) +
-                               ",\"led_pins\":" + jsonIntArray(led_pins) +
-                               ",\"laps\":" + std::to_string(laps) + "}",
-            true);
+                                   const std::vector<int>& led_pins, int laps,
+                                   const std::vector<Checkpoint>& checkpoints,
+                                   const std::vector<std::string>& spi_devices,
+                                   const std::map<std::string, std::string>& racers) {
+    std::ostringstream payload;
+    payload << "{\"led_order\":" << jsonIntArray(led_order)
+            << ",\"led_pins\":" << jsonIntArray(led_pins) << ",\"laps\":" << laps
+            << ",\"checkpoints\":[";
+    for (size_t i = 0; i < checkpoints.size(); ++i) {
+        payload << (i ? "," : "") << "{\"device\":" << jsonString(checkpoints[i].device)
+                << ",\"ok\":" << (checkpoints[i].ok ? "true" : "false") << "}";
+    }
+    payload << "],\"spi_devices\":[";
+    for (size_t i = 0; i < spi_devices.size(); ++i) {
+        payload << (i ? "," : "") << jsonString(spi_devices[i]);
+    }
+    payload << "],\"racers\":[";
+    bool first = true;
+    for (const auto& [tag, name] : racers) {
+        payload << (first ? "" : ",") << "{\"tag\":" << jsonString(tag)
+                << ",\"name\":" << jsonString(name) << "}";
+        first = false;
+    }
+    payload << "]}";
+    publish("race/config", payload.str(), true);
 }
