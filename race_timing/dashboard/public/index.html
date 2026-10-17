@@ -3,77 +3,195 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Race Timing Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<title>Race Timing</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="bg-glow"></div>
-
-  <header class="topbar">
-    <div class="brand">
-      <span class="brand-mark">◆</span>
-      <span class="brand-name">RACE TIMING</span>
-    </div>
-    <div class="conn" id="conn">
-      <span class="conn-dot" id="conn-dot"></span>
-      <span id="conn-label">connecting…</span>
+  <header class="bar no-print">
+    <div class="bar-title">Race Timing</div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="live" class="active">Live</button>
+      <button data-tab="results">Results</button>
+      <button data-tab="setup">Setup</button>
+      <button data-tab="dev">Developer</button>
+    </nav>
+    <div class="bar-status">
+      <span class="status-dot" id="timer-dot"></span>
+      <span id="timer-label">connecting</span>
     </div>
   </header>
 
-  <main class="stage">
-    <section class="state-card idle" id="state-card">
-      <div class="f1-lights" id="f1-lights" aria-label="start lights"></div>
-      <div class="state-label" id="state-label">READY</div>
-      <div class="lap-counter" id="lap-counter"></div>
-      <div class="clock" id="clock">00:00.00</div>
-      <div class="state-sub" id="state-sub">waiting for start signal</div>
-    </section>
-
-    <section class="laps-setting">
-      <span class="laps-title">LAPS</span>
-      <button class="btn btn-small" id="btn-laps-minus" aria-label="fewer laps" disabled>−</button>
-      <input class="laps-input" id="laps-input" type="number" min="1" max="99" value="3" disabled />
-      <button class="btn btn-small" id="btn-laps-plus" aria-label="more laps" disabled>+</button>
-      <span class="laps-hint">first to complete them wins</span>
-    </section>
-
-    <section class="controls">
-      <button class="btn btn-start" id="btn-start" disabled>START</button>
-      <button class="btn btn-reset" id="btn-reset" disabled>RESET</button>
-    </section>
-    <div class="timer-warning" id="timer-warning" hidden>
-      Race timer is offline — start <code>sudo ./build/race_timer</code> on the Pi.
+  <section class="race-strip no-print" id="race-strip">
+    <div class="strip-state">
+      <span class="flag" id="flag"></span>
+      <span id="state-label">Ready</span>
     </div>
+    <div class="strip-lights" id="lights" aria-label="start lights"></div>
+    <div class="strip-item">
+      <span class="label">Lap</span>
+      <span class="value" id="lap-counter">–</span>
+    </div>
+    <div class="strip-item">
+      <span class="label">Race time</span>
+      <span class="value clock" id="clock">0:00.0</span>
+    </div>
+    <div class="strip-actions">
+      <button class="btn btn-go" id="btn-start" disabled>Start</button>
+      <button class="btn" id="btn-reset" disabled>Reset</button>
+    </div>
+  </section>
+  <div class="notice no-print" id="timer-warning" hidden>
+    The race timer is offline. Start it on the Pi with <code>sudo ./build/race_timer</code> or <code>./start.sh</code>.
+  </div>
 
-    <section class="board">
-      <div class="board-head">
-        <span>POS</span>
-        <span>RACER</span>
-        <span class="num">LAPS</span>
-        <span class="num col-last">LAST LAP</span>
-        <span class="num">TIME</span>
+  <main>
+    <!-- LIVE ---------------------------------------------------------------->
+    <section class="tab-page" id="tab-live">
+      <div class="live">
+        <div class="panel standings">
+          <p class="caption" id="standings-caption" hidden>Race over: final classification. It's saved in Results; press Start for a new race.</p>
+          <table class="timing" id="standings">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+          <p class="empty" id="standings-empty">No crossings yet. Drivers appear here when they pass a timing line.</p>
+        </div>
+
+        <aside class="panel focus" id="focus">
+          <p class="empty">Select a driver in the table to follow their laps and sectors.</p>
+        </aside>
       </div>
-      <ol class="board-list" id="board-list">
-        <li class="empty-row" id="empty-row">No laps yet</li>
-      </ol>
     </section>
 
-    <section class="panel lights-panel">
-      <div class="panel-head">
-        <span>START LIGHTS ORDER</span>
-        <span class="panel-hint">first to light at the top · lights out all at once</span>
+    <!-- RESULTS ------------------------------------------------------------->
+    <section class="tab-page" id="tab-results" hidden>
+      <div class="toolbar no-print">
+        <label class="field">
+          <span>Race</span>
+          <select id="results-race"></select>
+        </label>
+        <button class="btn" id="btn-csv" title="Download this race as a spreadsheet (CSV)">Download CSV</button>
+        <button class="btn" id="btn-delete-race" title="Delete this saved race">Delete</button>
+        <div class="toolbar-spacer"></div>
+        <label class="field">
+          <span>Print</span>
+          <select id="results-layout">
+            <option value="tiles">Results, repeated to fill the page</option>
+            <option value="report">Full report, with lap-by-lap</option>
+          </select>
+        </label>
+        <button class="btn btn-primary" id="btn-print">Print</button>
       </div>
-      <ol class="order-list" id="order-list">
-        <li class="empty-row">Waiting for the race timer…</li>
-      </ol>
-      <div class="order-actions">
-        <button class="btn btn-small" id="btn-order-revert" disabled>Revert</button>
-        <button class="btn btn-small btn-primary" id="btn-order-save" disabled>Save order</button>
+      <p class="hint no-print" id="results-hint"></p>
+      <article class="sheet doc" id="sheet"></article>
+    </section>
+
+    <!-- SETUP --------------------------------------------------------------->
+    <section class="tab-page" id="tab-setup" hidden>
+      <div class="cols">
+        <div class="panel">
+          <h2>Race</h2>
+          <div class="row-field">
+            <span>Laps</span>
+            <div class="stepper">
+              <button class="btn" id="btn-laps-minus" aria-label="fewer laps">−</button>
+              <input id="laps-input" type="number" min="1" max="99" value="3" />
+              <button class="btn" id="btn-laps-plus" aria-label="more laps">+</button>
+            </div>
+          </div>
+          <p class="hint">The first driver to complete this many laps wins. The others are classified the next time they cross the finish line.</p>
+        </div>
+
+        <div class="panel panel-wide">
+          <h2>Drivers</h2>
+          <p class="hint">Saved to <code>racers.csv</code> on the Pi. To fill in a tag ID, press <b>Scan</b> and hold the tag to any reader. Changes apply straight away, even during a race.</p>
+          <table class="plain edit" id="racers-table">
+            <thead><tr><th>Tag ID</th><th>Name</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div class="unknown-tags" id="unknown-tags" hidden></div>
+          <p class="error" id="racers-error" hidden></p>
+          <div class="actions">
+            <button class="btn" id="btn-racer-add">Add driver</button>
+            <button class="btn" id="btn-reload-racers" title="Read racers.csv again, after editing it by hand">Reload file</button>
+            <div class="toolbar-spacer"></div>
+            <span class="save-status" id="racers-status" role="status" hidden></span>
+            <button class="btn" id="btn-racers-revert" disabled>Revert</button>
+            <button class="btn btn-primary" id="btn-racers-save" disabled>Save</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DEVELOPER ----------------------------------------------------------->
+    <section class="tab-page" id="tab-dev" hidden>
+      <div class="cols">
+        <div class="panel">
+          <h2>Timing lines</h2>
+          <p class="hint">Each line is one RC522 reader. The finish line counts laps. Sector lines go around the track in order and split each lap into sectors.</p>
+          <p class="hint">The Pi's SPI0 bus has two chip-select pins, CE0 (pin 24) and CE1 (pin 26), so <code>/dev/spidev0.0</code> and <code>/dev/spidev0.1</code> always exist, whether or not a reader is wired to them. Only the readers listed here are used.</p>
+          <table class="plain" id="lines-table">
+            <thead><tr><th>Line</th><th>Reader</th><th>Status</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="hint" id="lines-summary"></p>
+          <div class="actions">
+            <button class="btn" id="btn-line-add">Add sector line</button>
+            <div class="toolbar-spacer"></div>
+            <button class="btn" id="btn-lines-revert" disabled>Revert</button>
+            <button class="btn btn-primary" id="btn-lines-save" disabled>Save</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Start lights</h2>
+          <p class="hint">Order the lights come on, top first. They all go out together. Test lights a single LED for 1 second.</p>
+          <table class="plain" id="order-table">
+            <thead><tr><th>#</th><th>Light</th><th>Pin</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <div class="actions">
+            <div class="toolbar-spacer"></div>
+            <button class="btn" id="btn-order-revert" disabled>Revert</button>
+            <button class="btn btn-primary" id="btn-order-save" disabled>Save order</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Simulate a read</h2>
+          <p class="hint">Sends a tag read to the timer as if a reader had seen it. Counts in a running race.</p>
+          <label class="row-field">
+            <span>Line</span>
+            <select id="sim-line"></select>
+          </label>
+          <label class="row-field">
+            <span>Driver</span>
+            <select id="sim-driver"></select>
+          </label>
+          <label class="row-field" id="sim-custom-row" hidden>
+            <span>Tag ID</span>
+            <input id="sim-tag" type="text" placeholder="A1B2C3D4" maxlength="20" />
+          </label>
+          <div class="actions">
+            <div class="toolbar-spacer"></div>
+            <button class="btn btn-primary" id="btn-sim">Send read</button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Reader activity</h2>
+          <p class="hint">Every tag shown to a reader, newest first. Use it to check each line's wiring and find new tag IDs.</p>
+          <table class="plain" id="tag-table">
+            <thead><tr><th>Time</th><th>Line</th><th>Tag</th><th>Driver</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
       </div>
     </section>
   </main>
+
+  <!-- Filled just before printing; only this is printed from the Results tab. -->
+  <div class="print-area doc" id="print-area" aria-hidden="true"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="app.js"></script>
